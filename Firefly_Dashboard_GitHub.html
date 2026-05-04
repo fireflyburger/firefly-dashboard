@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Firefly Burger — Management Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,sans-serif;background:#0d1117;color:#e6edf3;min-height:100vh}
+.topbar{background:#161b22;border-bottom:1px solid #30363d;padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:200}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{width:32px;height:32px;background:#ff6b2b;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff}
+.logo-text{font-size:15px;font-weight:600;color:#e6edf3}
+.logo-sub{font-size:11px;color:#7d8590}
+.topbar-right{display:flex;align-items:center;gap:10px}
+.reload-btn{background:#21262d;border:1px solid #30363d;color:#e6edf3;border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px}
+.reload-btn:hover{background:#30363d}
+#last-updated{font-size:11px;color:#7d8590}
+.upload-zone{background:#161b22;border:1.5px dashed #30363d;border-radius:12px;padding:48px 24px;text-align:center;margin:40px auto;max-width:520px;cursor:pointer;transition:border-color .2s}
+.upload-zone:hover,.upload-zone.drag{border-color:#ff6b2b}
+.upload-icon{width:52px;height:52px;background:#ff6b2b22;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:24px}
+.upload-title{font-size:17px;font-weight:600;color:#e6edf3;margin-bottom:6px}
+.upload-sub{font-size:13px;color:#7d8590;margin-bottom:18px}
+.upload-btn{background:#ff6b2b;color:#fff;border:none;border-radius:8px;padding:10px 26px;font-size:14px;font-weight:600;cursor:pointer}
+.upload-btn:hover{background:#e85d04}
+input[type=file]{display:none}
+.dashboard{display:none;padding:20px 24px 40px}
+.dash-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;gap:12px;flex-wrap:wrap}
+.dash-title{font-size:18px;font-weight:700;color:#e6edf3}
+.dash-meta{font-size:12px;color:#7d8590;margin-top:3px}
+.nav-tabs{display:flex;gap:4px;background:#161b22;border:1px solid #30363d;border-radius:8px;padding:3px;margin-bottom:18px;width:fit-content;flex-wrap:wrap}
+.nav-tab{padding:6px 16px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;color:#7d8590;border:none;background:transparent;transition:all .15s;white-space:nowrap}
+.nav-tab.active{background:#ff6b2b;color:#fff}
+.nav-tab:hover:not(.active){color:#e6edf3}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+.filter-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.filter-bar select{background:#21262d;border:1px solid #30363d;color:#e6edf3;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer}
+.filter-bar label{font-size:11px;color:#7d8590;text-transform:uppercase;letter-spacing:.04em}
+.filter-btn{background:#21262d;border:1px solid #30363d;color:#7d8590;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;transition:all .15s}
+.filter-btn.active{background:#ff6b2b22;border-color:#ff6b2b;color:#ff6b2b}
+.filter-btn:hover:not(.active){border-color:#7d8590;color:#e6edf3}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin-bottom:16px}
+.kpi{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:15px;position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:var(--accent,#ff6b2b)}
+.kpi-label{font-size:10px;color:#7d8590;margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em}
+.kpi-value{font-size:21px;font-weight:700;color:#e6edf3;line-height:1}
+.kpi-sub{font-size:11px;color:#7d8590;margin-top:4px}
+.badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px}
+.up{background:#1a3a1a;color:#3fb950}
+.dn{background:#3a1a1a;color:#f85149}
+.neu{background:#21262d;color:#7d8590}
+.card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:15px}
+.card-title{font-size:11px;font-weight:600;color:#7d8590;margin-bottom:12px;text-transform:uppercase;letter-spacing:.05em}
+.row2{display:grid;grid-template-columns:1.5fr 1fr;gap:12px;margin-bottom:12px}
+.row2e{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.mb{margin-bottom:12px}
+.chart-wrap{position:relative;width:100%}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;padding:7px 10px;color:#7d8590;font-weight:500;border-bottom:1px solid #30363d;font-size:11px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+td{padding:7px 10px;border-bottom:1px solid #21262d;color:#e6edf3}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#1c2128}
+.rank-badge{display:inline-block;width:22px;height:22px;border-radius:50%;background:#21262d;text-align:center;line-height:22px;font-size:11px;font-weight:700;color:#7d8590}
+.rank-1{background:#ffd70022;color:#ffd700}
+.rank-2{background:#c0c0c022;color:#c0c0c0}
+.rank-3{background:#cd7f3222;color:#cd7f32}
+.prog-bar{height:3px;background:#21262d;border-radius:2px;margin-top:3px}
+.prog-fill{height:3px;background:#ff6b2b;border-radius:2px}
+.alert-row{display:flex;align-items:center;gap:10px;padding:9px 12px;background:#3a1a1a22;border-radius:8px;margin-bottom:7px;border-left:3px solid #f85149}
+.alert-row.warn{background:#3a2a1022;border-left-color:#e3b341}
+.alert-name{font-size:13px;font-weight:600;color:#e6edf3}
+.alert-detail{font-size:11px;color:#7d8590;margin-top:1px}
+.alert-pct{margin-left:auto;font-size:13px;font-weight:700;color:#f85149;white-space:nowrap}
+.alert-pct.warn{color:#e3b341}
+.empty-state{text-align:center;padding:24px;color:#7d8590;font-size:13px}
+.legend-row{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:#7d8590}
+.legend-sq{width:9px;height:9px;border-radius:2px;flex-shrink:0}
+.branch-link{color:#ff6b2b;cursor:pointer;text-decoration:underline;font-size:12px}
+.branch-link:hover{color:#ffa657}
+
+/* ── MODAL ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto}
+.modal-overlay.open{display:flex}
+.modal{background:#161b22;border:1px solid #30363d;border-radius:14px;width:100%;max-width:900px;padding:24px;margin:auto}
+.modal-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;gap:12px}
+.modal-title{font-size:17px;font-weight:700;color:#e6edf3}
+.modal-sub{font-size:12px;color:#7d8590;margin-top:3px}
+.modal-close{background:#21262d;border:1px solid #30363d;color:#7d8590;border-radius:8px;padding:6px 12px;font-size:13px;cursor:pointer;flex-shrink:0}
+.modal-close:hover{color:#e6edf3;border-color:#7d8590}
+.modal-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:18px}
+.modal-kpi{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px}
+.modal-kpi-label{font-size:10px;color:#7d8590;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+.modal-kpi-value{font-size:18px;font-weight:700;color:#e6edf3}
+.modal-kpi-sub{font-size:10px;color:#7d8590;margin-top:3px}
+.modal-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+.modal-card{background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:12px}
+.modal-card-title{font-size:10px;color:#7d8590;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px}
+
+@media(max-width:700px){
+  .row2,.row2e{grid-template-columns:1fr}
+  .kpi-grid{grid-template-columns:repeat(2,1fr)}
+  .modal-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-icon">FF</div>
+    <div>
+      <div class="logo-text">Firefly Burger</div>
+      <div class="logo-sub">Management Dashboard</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span id="last-updated"></span>
+    <button class="reload-btn" onclick="reloadData()">&#8635; Reload Data</button>
+  </div>
+</div>
+
+<div class="upload-zone" id="uploadZone">
+  <div class="upload-icon" id="uploadIcon">&#128293;</div>
+  <div class="upload-title" id="uploadTitle">Loading data...</div>
+  <div class="upload-sub" id="uploadSub">Fetching latest sales data from server</div>
+  <div style="margin-top:16px;width:200px;height:3px;background:#21262d;border-radius:2px;margin-left:auto;margin-right:auto">
+    <div id="loadBar" style="height:3px;background:#ff6b2b;border-radius:2px;width:0%;transition:width .4s"></div>
+  </div>
+  <!-- fallback manual upload (hidden initially) -->
+  <div id="manualUpload" style="display:none;margin-top:20px">
+    <div style="font-size:12px;color:#f85149;margin-bottom:12px">⚠️ Could not load automatically — upload manually</div>
+    <button class="upload-btn" onclick="document.getElementById('fileInput').click()">Choose File</button>
+    <input type="file" id="fileInput" accept=".xlsx,.xls">
+  </div>
+  <div style="margin-top:14px;font-size:11px;color:#7d8590" id="uploadNote">Data loads automatically on every visit</div>
+</div>
+
+<div class="dashboard" id="dashboard">
+  <div class="dash-header">
+    <div>
+      <div class="dash-title">Branch Performance Overview</div>
+      <div class="dash-meta" id="dashMeta"></div>
+    </div>
+  </div>
+
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="switchTab('overview',this)">Overview</button>
+    <button class="nav-tab" onclick="switchTab('performance',this)">Branch Performance</button>
+    <button class="nav-tab" onclick="switchTab('trends',this)">Trends</button>
+    <button class="nav-tab" onclick="switchTab('summary',this)">Summary Table</button>
+    <button class="nav-tab" onclick="switchTab('branches',this)">All Branches</button>
+  </div>
+
+  <!-- TAB 1: OVERVIEW -->
+  <div class="tab-panel active" id="tab-overview">
+    <!-- Year filter buttons -->
+    <div class="filter-bar" id="yearFilter"></div>
+    <!-- Country / Region advanced filters -->
+    <div class="filter-bar" id="overviewFilters" style="margin-bottom:16px;padding:10px 14px;background:#161b22;border:1px solid #30363d;border-radius:8px;gap:12px;align-items:center">
+      <label style="color:#7d8590;font-size:11px;text-transform:uppercase;letter-spacing:.05em">Country</label>
+      <select id="ovCountry" onchange="applyOverviewFilters()" style="background:#21262d;border:1px solid #30363d;color:#e6edf3;border-radius:6px;padding:5px 10px;font-size:12px">
+        <option value="all">All countries</option>
+      </select>
+      <label style="color:#7d8590;font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin-left:4px">Exclude</label>
+      <div id="ovExclude" style="display:flex;flex-wrap:wrap;gap:5px"></div>
+      <button onclick="clearOverviewFilters()" style="margin-left:auto;background:transparent;border:1px solid #30363d;color:#7d8590;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer">Clear filters</button>
+    </div>
+    <div class="kpi-grid" id="kpiGrid"></div>
+    <div class="row2 mb">
+      <div class="card">
+        <div class="card-title">Monthly sales trend</div>
+        <div class="legend-row">
+          <span class="legend-item"><span class="legend-sq" style="background:#ff6b2b"></span>Total sales</span>
+          <span class="legend-item"><span class="legend-sq" style="background:#378add;opacity:.6"></span>Prior period</span>
+        </div>
+        <div class="chart-wrap" style="height:210px">
+          <canvas id="trendChart" role="img" aria-label="Monthly sales trend">Monthly sales trend</canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Sales by country</div>
+        <div class="chart-wrap" id="cntryWrap" style="height:240px">
+          <canvas id="countryChart" role="img" aria-label="Sales by country">Sales by country</canvas>
+        </div>
+      </div>
+    </div>
+    <div class="row2e">
+      <div class="card">
+        <div class="card-title">Annual comparison</div>
+        <div class="chart-wrap" style="height:195px">
+          <canvas id="yearChart" role="img" aria-label="Annual sales">Annual sales</canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Month-over-month growth %</div>
+        <div class="chart-wrap" style="height:195px">
+          <canvas id="momChart" role="img" aria-label="MoM growth">MoM growth</canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 2: BRANCH PERFORMANCE -->
+  <div class="tab-panel" id="tab-performance">
+    <div class="filter-bar">
+      <label>Year</label>
+      <select id="perfYear" onchange="renderPerformance()"></select>
+      <label style="margin-left:8px">Country</label>
+      <select id="perfCountry" onchange="renderPerformance()"></select>
+    </div>
+    <div class="row2e mb">
+      <div class="card">
+        <div class="card-title">Top 10 branches</div>
+        <div class="chart-wrap" id="topWrap" style="height:320px">
+          <canvas id="topChart" role="img" aria-label="Top branches">Top branches</canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Bottom 10 branches</div>
+        <div class="chart-wrap" id="botWrap" style="height:320px">
+          <canvas id="botChart" role="img" aria-label="Bottom branches">Bottom branches</canvas>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Ranked list — click a branch name for full detail</div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr>
+            <th style="width:32px">#</th>
+            <th>Branch</th><th>Country</th>
+            <th style="text-align:right">Sales ($)</th>
+            <th style="text-align:right">vs Prior Year</th>
+            <th style="width:100px">Share</th>
+          </tr></thead>
+          <tbody id="perfBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3: TRENDS -->
+  <div class="tab-panel" id="tab-trends">
+    <div class="filter-bar">
+      <label>Branch</label>
+      <select id="trendBranch" onchange="renderTrends()"><option value="all">All branches</option></select>
+      <label style="margin-left:8px">Period</label>
+      <select id="trendPeriod" onchange="renderTrends()">
+        <option value="all">All time</option>
+        <option value="12">Last 12 months</option>
+        <option value="24">Last 24 months</option>
+        <option value="36">Last 36 months</option>
+      </select>
+    </div>
+    <div class="card mb">
+      <div class="card-title">Sales over time — <span id="trendLabel" style="color:#ff6b2b;font-style:normal"></span></div>
+      <div class="chart-wrap" style="height:230px">
+        <canvas id="fullTrendChart" role="img" aria-label="Full sales trend">Full trend</canvas>
+      </div>
+    </div>
+    <div class="row2e">
+      <div class="card">
+        <div class="card-title">Month-over-month %</div>
+        <div class="chart-wrap" style="height:195px">
+          <canvas id="momFullChart" role="img" aria-label="MoM change">MoM</canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Declining branches <span id="declineCount" style="background:#3a1a1a;color:#f85149;border-radius:4px;padding:1px 7px;font-size:11px;margin-left:4px;font-weight:700"></span> <span id="declineYearLabel" style="font-size:11px;color:#7d8590;font-weight:400"></span></div>
+        <div id="declineList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 4: SUMMARY TABLE -->
+  <div class="tab-panel" id="tab-summary">
+    <div class="filter-bar">
+      <label>Branch</label>
+      <select id="sumBranch" onchange="renderSummary()"><option value="all">All branches</option></select>
+      <label style="margin-left:8px">Month</label>
+      <select id="sumMonth" onchange="renderSummary()"><option value="all">All months</option></select>
+      <label style="margin-left:8px">Country</label>
+      <select id="sumCountry" onchange="renderSummary()"><option value="all">All countries</option></select>
+    </div>
+    <div class="card">
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr>
+            <th style="width:32px">#</th>
+            <th>Branch</th><th>Country</th>
+            <th style="text-align:right">Total Sales</th>
+            <th style="text-align:right">Avg / Month</th>
+            <th style="text-align:right">Growth %</th>
+            <th style="text-align:right">Best Month</th>
+            <th style="width:90px">Share</th>
+            <th>Detail</th>
+          </tr></thead>
+          <tbody id="summaryBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 5: ALL BRANCHES -->
+  <div class="tab-panel" id="tab-branches">
+    <div class="filter-bar">
+      <label>Country</label>
+      <select id="allBranchCountry" onchange="renderAllBranches()"><option value="all">All countries</option></select>
+      <label style="margin-left:8px">Status</label>
+      <select id="allBranchStatus" onchange="renderAllBranches()">
+        <option value="all">All</option>
+        <option value="active">Active (2026)</option>
+        <option value="recent">Recent (2025)</option>
+        <option value="inactive">Inactive</option>
+      </select>
+      <label style="margin-left:8px">Sort by</label>
+      <select id="allBranchSort" onchange="renderAllBranches()">
+        <option value="sales">Total Sales</option>
+        <option value="growth">Growth %</option>
+        <option value="name">Name</option>
+      </select>
+    </div>
+    <div class="card">
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr>
+            <th>#</th>
+            <th>Branch</th><th>Country</th>
+            <th style="text-align:right">Since</th>
+            <th style="text-align:right">Last Month</th>
+            <th style="text-align:right">Total Sales</th>
+            <th style="text-align:right">Growth %</th>
+            <th>Status</th>
+            <th>Detail</th>
+          </tr></thead>
+          <tbody id="allBranchBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BRANCH DETAIL MODAL -->
+<div class="modal-overlay" id="branchModal" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modalTitle">—</div>
+        <div class="modal-sub" id="modalSub">—</div>
+      </div>
+      <button class="modal-close" onclick="closeModal()">&#10005; Close</button>
+    </div>
+    <div class="modal-kpis" id="modalKpis"></div>
+    <div class="modal-grid">
+      <div class="modal-card">
+        <div class="modal-card-title">Full sales history</div>
+        <div class="chart-wrap" style="height:200px">
+          <canvas id="modalTrendChart" role="img" aria-label="Branch sales history">Branch sales history</canvas>
+        </div>
+      </div>
+      <div class="modal-card">
+        <div class="modal-card-title">Year-by-year comparison</div>
+        <div class="chart-wrap" style="height:200px">
+          <canvas id="modalYearChart" role="img" aria-label="Branch annual sales">Branch annual</canvas>
+        </div>
+      </div>
+    </div>
+    <div class="modal-card" style="margin-bottom:12px">
+      <div class="modal-card-title">Month-over-month change %</div>
+      <div class="chart-wrap" style="height:130px">
+        <canvas id="modalMomChart" role="img" aria-label="Branch MoM">Branch MoM</canvas>
+      </div>
+    </div>
+    <div class="modal-card">
+      <div class="modal-card-title">Monthly breakdown</div>
+      <div style="overflow-x:auto;max-height:260px;overflow-y:auto">
+        <table>
+          <thead><tr>
+            <th>Month</th>
+            <th style="text-align:right">Sales ($)</th>
+            <th style="text-align:right">MoM %</th>
+            <th style="width:120px">vs Peak</th>
+          </tr></thead>
+          <tbody id="modalTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+let CHARTS={};
+let DATA=null;
+let activeYear='all';
+
+const COLORS=['#ff6b2b','#378add','#3fb950','#e3b341','#a371f7','#56d364','#79c0ff','#ffa657','#f778ba','#7ee787'];
+
+function fmt(n){
+  if(n==null||isNaN(n)) return '—';
+  const a=Math.abs(n);
+  const sign=n<0?'-':'';
+  if(a>=1e6) return sign+'$'+(a/1e6).toFixed(1)+'M';
+  if(a>=1e3) return sign+'$'+Math.round(a/1e3)+'K';
+  return sign+'$'+Math.round(a).toLocaleString();
+}
+function fmtFull(n){return n==null?'—':'$'+Math.round(n).toLocaleString();}
+function fmtPct(n,dec=1){return n==null?'—':(n>=0?'+':'')+n.toFixed(dec)+'%';}
+function pct(a,b){return b>0?((a-b)/b*100):null;}
+
+/* ── AUTO-LOAD FROM GITHUB ── */
+const EXCEL_URL='ورقة_مبيعات_الافرع___فايرفلاي_برجر__.xlsx';
+
+function setLoadState(icon,title,sub,barPct){
+  $('uploadIcon').textContent=icon;
+  $('uploadTitle').textContent=title;
+  $('uploadSub').textContent=sub;
+  $('loadBar').style.width=barPct+'%';
+}
+
+async function autoLoadFromGitHub(){
+  try{
+    setLoadState('🔄','Connecting...','Fetching latest sales file from server',20);
+    const resp=await fetch(EXCEL_URL,{cache:'no-cache'});
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    setLoadState('📊','Reading data...','Processing Excel file',60);
+    const buffer=await resp.arrayBuffer();
+    setLoadState('⚙️','Building dashboard...','Calculating analytics',85);
+    const wb=XLSX.read(buffer,{type:'array'});
+    const data=parseWorkbook(wb);
+    if(!data) throw new Error('Unrecognized file structure');
+    DATA=data;
+    setLoadState('✅','Done!','Dashboard ready',100);
+    setTimeout(()=>{
+      initDashboard(data);
+      $('last-updated').textContent='Updated: '+new Date().toLocaleDateString('en');
+    },400);
+  }catch(err){
+    setLoadState('⚠️','Auto-load failed','You can upload the file manually',0);
+    $('manualUpload').style.display='block';
+    $('uploadNote').textContent='Error: '+err.message;
+    console.error('Auto-load error:',err);
+  }
+}
+
+/* ── MANUAL FALLBACK ── */
+$('fileInput').addEventListener('change',e=>loadFile(e.target.files[0]));
+
+function loadFile(file){
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      const data=parseWorkbook(wb);
+      if(!data){alert('Could not recognize file structure.');return;}
+      DATA=data;
+      initDashboard(data);
+      $('last-updated').textContent='Updated: '+new Date().toLocaleDateString('en');
+    }catch(err){alert('Error: '+err.message);}
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* start auto-load when page opens */
+autoLoadFromGitHub();
+
+function reloadData(){
+  $('dashboard').style.display='none';
+  $('uploadZone').style.display='block';
+  $('manualUpload').style.display='none';
+  autoLoadFromGitHub();
+}
+
+/* ── MONTH PARSER: handles Excel serials (43862), 'Jan.2020' strings, ISO strings ── */
+function parseMonthValue(v){
+  if(v==null) return null;
+  /* Excel date serial numbers — date cols are in range 43466 (Jan 2019) to 47848 (Dec 2030) */
+  if(typeof v==='number'&&v>43000&&v<50000){
+    try{
+      const d=XLSX.SSF.parse_date_code(v);
+      if(d&&d.y>=2019&&d.y<=2030) return d.y+'-'+String(d.m).padStart(2,'0');
+    }catch(e){}
+  }
+  if(typeof v==='string'){
+    /* 'Jan.2020', 'Feb.2021', etc */
+    const janMatch=v.match(/^([A-Za-z]{3})[\.\-\s]?(\d{4})$/);
+    if(janMatch){
+      const months={Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
+      const mo=months[janMatch[1]];
+      if(mo) return janMatch[2]+'-'+String(mo).padStart(2,'0');
+    }
+    /* ISO: '2020-01', '2020-01-01' */
+    const iso=v.match(/^(\d{4})-(\d{2})/);
+    if(iso&&parseInt(iso[1])>=2019) return iso[1]+'-'+iso[2];
+    /* slash: '1/2020' or '01/01/2020' */
+    const slash=v.match(/^(\d{1,2})\/(\d{4})$/);
+    if(slash) return slash[2]+'-'+String(parseInt(slash[1])).padStart(2,'0');
+  }
+  return null;
+}
+
+function parseWorkbook(wb){
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  /* raw:true (default) — keeps numbers as numbers.
+     No cellDates — prevents date-formatted columns from converting
+     sales values (50K-300K) into Date objects and losing them. */
+  const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+
+  /* ── find header row: first row where ≥10 cells parse as month values ── */
+  let headerRow=-1;
+  for(let i=0;i<Math.min(12,raw.length);i++){
+    const row=raw[i]||[];
+    let cnt=0;
+    for(let j=0;j<row.length;j++){
+      if(parseMonthValue(row[j])) cnt++;
+    }
+    if(cnt>=10){headerRow=i;break;}
+  }
+  if(headerRow<0) return null;
+
+  /* ── extract month columns from header row ── */
+  const monthsIdx=[];
+  const hrow=raw[headerRow];
+  for(let j=0;j<hrow.length;j++){
+    const m=parseMonthValue(hrow[j]);
+    if(m) monthsIdx.push({col:j,month:m});
+  }
+  if(monthsIdx.length<6) return null;
+  monthsIdx.sort((a,b)=>a.month.localeCompare(b.month));
+
+  /* ── determine data columns: country=col0, city=col1 OR find by content ── */
+  /* scan a few data rows to confirm col0=country, col1=city */
+  let countryCol=0, cityCol=1;
+  for(let i=headerRow+1;i<Math.min(headerRow+5,raw.length);i++){
+    const row=raw[i]||[];
+    if(row[1]&&typeof row[1]==='string'&&row[1].trim()) {cityCol=1;countryCol=0;break;}
+  }
+
+  /* ── parse branches ── */
+  const branches=[];
+  let curCountry=null;
+  for(let i=headerRow+1;i<raw.length;i++){
+    const row=raw[i];
+    if(!row||!row.length) continue;
+
+    /* update current country if col0 has a non-numeric string */
+    const c0=row[countryCol];
+    if(c0&&typeof c0==='string'){
+      const s=c0.trim();
+      if(s&&isNaN(Number(s))&&s.length>1) curCountry=s;
+    }
+
+    const city=row[cityCol];
+    if(!city||typeof city!=='string'||!city.trim()) continue;
+    const cityStr=city.trim();
+    /* skip if city looks like a header word */
+    if(['city','branch','name'].includes(cityStr.toLowerCase())) continue;
+
+    const monthly={};
+    for(const {col,month} of monthsIdx){
+      if(col>=row.length) continue;
+      let v=row[col];
+      /* clean string numbers */
+      if(typeof v==='string') v=parseFloat(v.replace(/,/g,'').replace(/\s/g,''));
+      /* only accept real positive sales values; exclude date serials (43K-50K range is safe since sales are ≥1K or 0) */
+      if(typeof v==='number'&&isFinite(v)&&v>0&&v<1000000) monthly[month]=Math.round(v*100)/100;
+    }
+    if(Object.keys(monthly).length>0)
+      branches.push({country:curCountry||'Unknown',city:cityStr,monthly});
+  }
+  if(branches.length<3) return null;
+
+  /* ── build metadata ── */
+  const allMonths=[...new Set(branches.flatMap(b=>Object.keys(b.monthly)))].sort();
+  const allYears=[...new Set(allMonths.map(m=>m.slice(0,4)))].sort();
+  const countries=[...new Set(branches.map(b=>b.country))].sort();
+
+  const ymCounts={};
+  allMonths.forEach(m=>{const y=m.slice(0,4);ymCounts[y]=(ymCounts[y]||0)+1;});
+  const lastCompleteYear=allYears.filter(y=>ymCounts[y]===12).slice(-1)[0]
+    ||allYears.filter(y=>ymCounts[y]>=10).slice(-1)[0]
+    ||allYears.slice(-2)[0]||allYears[0];
+  const prevCompleteYear=String(parseInt(lastCompleteYear)-1);
+  const ytdYear=allYears[allYears.length-1];
+  const isYTD=ytdYear!==lastCompleteYear;
+  const ytdMonths=allMonths.filter(m=>m.startsWith(ytdYear)).length;
+
+  return {branches,allMonths,allYears,countries,lastCompleteYear,prevCompleteYear,ytdYear,isYTD,ytdMonths,ymCounts};
+}
+
+/* ── INIT ── */
+function initDashboard(data){
+  $('uploadZone').style.display='none';
+  $('dashboard').style.display='block';
+  const lm=data.allMonths[data.allMonths.length-1];
+  $('dashMeta').textContent=`${data.branches.length} branches · ${data.countries.length} countries · ${data.allMonths[0]} → ${lm}`;
+  buildYearFilter(data);
+  buildOverviewFilters(data);
+  populateSelects(data);
+  renderOverview(data,'all');
+  renderPerformance();
+  renderTrends();
+  renderSummary();
+  renderAllBranches();
+}
+
+function switchTab(name,btn){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(b=>b.classList.remove('active'));
+  $('tab-'+name).classList.add('active');
+  btn.classList.add('active');
+}
+
+/* ── SELECTS ── */
+function populateSelects(data){
+  const perfY=$('perfYear'); perfY.innerHTML='';
+  [...data.allYears].reverse().forEach(y=>{const o=document.createElement('option');o.value=y;o.textContent=y;perfY.appendChild(o);});
+  perfY.value=data.lastCompleteYear;
+
+  [$('perfCountry'),$('allBranchCountry')].forEach(el=>{
+    el.innerHTML='<option value="all">All countries</option>';
+    data.countries.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;el.appendChild(o);});
+  });
+
+  const trendB=$('trendBranch');trendB.innerHTML='<option value="all">All branches</option>';
+  data.branches.forEach(b=>{const o=document.createElement('option');o.value=b.city;o.textContent=b.city+' ('+b.country+')';trendB.appendChild(o);});
+
+  const sumB=$('sumBranch');sumB.innerHTML='<option value="all">All branches</option>';
+  data.branches.forEach(b=>{const o=document.createElement('option');o.value=b.city;o.textContent=b.city;sumB.appendChild(o);});
+
+  const sumM=$('sumMonth');sumM.innerHTML='<option value="all">All months</option>';
+  data.allMonths.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent=m;sumM.appendChild(o);});
+
+  const sumC=$('sumCountry');sumC.innerHTML='<option value="all">All countries</option>';
+  data.countries.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;sumC.appendChild(o);});
+}
+
+/* ── YEAR FILTER ── */
+function buildYearFilter(data){
+  const bar=$('yearFilter');bar.innerHTML='';
+  ['all',...data.allYears].forEach(y=>{
+    const btn=document.createElement('button');
+    btn.className='filter-btn'+(y==='all'?' active':'');
+    btn.textContent=y==='all'?'All years':y;
+    btn.onclick=()=>{
+      activeYear=y;
+      bar.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      renderOverview(data,y);
+    };
+    bar.appendChild(btn);
+  });
+}
+
+/* ── HELPERS ── */
+function sumYear(branches,year){return branches.reduce((s,b)=>s+Object.entries(b.monthly).filter(([m])=>m.startsWith(year)).reduce((a,[,v])=>a+v,0),0);}
+function sumYearN(branches,year,n){return branches.reduce((s,b)=>{const ym=Object.entries(b.monthly).filter(([m])=>m.startsWith(year)).sort((a,c)=>a[0].localeCompare(c[0])).slice(0,n);return s+ym.reduce((a,[,v])=>a+v,0);},0);}
+function getMonths(data,year){return year==='all'?data.allMonths:data.allMonths.filter(m=>m.startsWith(year));}
+function destroyChart(id){if(CHARTS[id]){try{CHARTS[id].destroy();}catch(e){}delete CHARTS[id];}}
+
+/* CHART OPTION: always show first & last x-label */
+function xTicksOpts(count){
+  return {color:'#7d8590',font:{size:10},maxRotation:45,autoSkip:true,
+    maxTicksLimit:count<=24?count:14,
+    callback:function(val,i,ticks){
+      if(i===0||i===ticks.length-1) return this.getLabelForValue(val);
+      return ticks.length<=14?this.getLabelForValue(val):(i%Math.ceil(ticks.length/12)===0?this.getLabelForValue(val):'');
+    }};
+}
+
+/* ══════ OVERVIEW FILTER STATE ══════ */
+let ovExcluded=new Set();
+let ovCountry='all';
+
+function applyOverviewFilters(){
+  ovCountry=$('ovCountry').value;
+  renderOverview(DATA,activeYear);
+}
+
+function toggleExclude(country){
+  if(ovExcluded.has(country)) ovExcluded.delete(country);
+  else ovExcluded.add(country);
+  /* update button styles */
+  document.querySelectorAll('.excl-btn').forEach(btn=>{
+    const c=btn.dataset.country;
+    btn.style.background=ovExcluded.has(c)?'#3a1a1a':'';;
+    btn.style.color=ovExcluded.has(c)?'#f85149':'#7d8590';
+    btn.style.borderColor=ovExcluded.has(c)?'#f85149':'#30363d';
+  });
+  renderOverview(DATA,activeYear);
+}
+
+function clearOverviewFilters(){
+  ovExcluded.clear();
+  ovCountry='all';
+  $('ovCountry').value='all';
+  document.querySelectorAll('.excl-btn').forEach(btn=>{
+    btn.style.background='';btn.style.color='#7d8590';btn.style.borderColor='#30363d';
+  });
+  renderOverview(DATA,activeYear);
+}
+
+function buildOverviewFilters(data){
+  /* country select */
+  const sel=$('ovCountry');
+  sel.innerHTML='<option value="all">All countries</option>';
+  data.countries.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;sel.appendChild(o);});
+  /* exclude toggle buttons */
+  const excDiv=$('ovExclude');
+  excDiv.innerHTML='';
+  data.countries.forEach(c=>{
+    const btn=document.createElement('button');
+    btn.className='excl-btn';
+    btn.dataset.country=c;
+    btn.textContent=c;
+    btn.onclick=()=>toggleExclude(c);
+    btn.style.cssText='background:transparent;border:1px solid #30363d;color:#7d8590;border-radius:5px;padding:3px 9px;font-size:11px;cursor:pointer;transition:all .15s';
+    excDiv.appendChild(btn);
+  });
+}
+
+/* ══════ TAB 1: OVERVIEW ══════ */
+function renderOverview(data,year){
+  /* apply country filters */
+  let branches=data.branches;
+  if(ovCountry!=='all') branches=branches.filter(b=>b.country===ovCountry);
+  if(ovExcluded.size>0) branches=branches.filter(b=>!ovExcluded.has(b.country));
+
+  const months=getMonths(data,year);
+  const lcy=data.lastCompleteYear,pcy=data.prevCompleteYear,ytd=data.ytdYear;
+
+  const totalAll=months.reduce((s,m)=>s+branches.reduce((a,b)=>a+(b.monthly[m]||0),0),0);
+  const totalLCY=sumYear(branches,lcy);
+  const totalPCY=sumYear(branches,pcy);
+  const growth=pct(totalLCY,totalPCY);
+  const active=branches.filter(b=>months.some(m=>b.monthly[m]>0)).length;
+  const perBranch=active>0?totalAll/active:0;
+
+  const mt=months.map(m=>({m,v:Math.round(branches.reduce((s,b)=>s+(b.monthly[m]||0),0))}));
+  const momArr=[];for(let i=1;i<mt.length;i++){const p=mt[i-1].v;momArr.push(p>0?((mt[i].v-p)/p*100):null);}
+  const validMom=momArr.filter(v=>v!=null);
+  const avgMoM=validMom.length?validMom.reduce((s,v)=>s+v,0)/validMom.length:null;
+
+  const topC=Object.entries(branches.reduce((agg,b)=>{
+    const t=months.reduce((s,m)=>s+(b.monthly[m]||0),0);
+    agg[b.country]=(agg[b.country]||0)+t;return agg;},{}
+  )).sort((a,b)=>b[1]-a[1])[0];
+
+  /* ── YTD: compare SAME months of ytdYear vs SAME months of lcy (not pcy) ── */
+  /* e.g. Jan-Mar 2026 vs Jan-Mar 2025 (the last complete year) */
+  const ytdTotal=data.isYTD?sumYear(branches,ytd):null;
+  const ytdMoCount=data.ytdMonths; /* how many months are in ytdYear */
+  /* sum same N months of lcy for fair comparison */
+  const ytdPriorBase=data.isYTD?sumYearN(branches,lcy,ytdMoCount):null;
+  const ytdG=ytdPriorBase>0?pct(ytdTotal,ytdPriorBase):null;
+
+  const activeLabel=ovCountry!=='all'?ovCountry:(ovExcluded.size>0?`${branches.length} br (${ovExcluded.size} excluded)`:`${active} active branches`);
+
+  $('kpiGrid').innerHTML=`
+    <div class="kpi" style="--accent:#ff6b2b">
+      <div class="kpi-label">Total sales</div>
+      <div class="kpi-value">${fmt(totalAll)}</div>
+      <div class="kpi-sub">${activeLabel}</div>
+    </div>
+    <div class="kpi" style="--accent:${growth>=0?'#3fb950':'#f85149'}">
+      <div class="kpi-label">Growth (${lcy} vs ${pcy})</div>
+      <div class="kpi-value"><span class="badge ${growth>=0?'up':'dn'}">${fmtPct(growth)}</span></div>
+      <div class="kpi-sub">${fmt(totalLCY)} vs ${fmt(totalPCY)}</div>
+    </div>
+    <div class="kpi" style="--accent:#378add">
+      <div class="kpi-label">Sales per branch</div>
+      <div class="kpi-value">${fmt(perBranch)}</div>
+      <div class="kpi-sub">avg · ${active} branches</div>
+    </div>
+    <div class="kpi" style="--accent:#a371f7">
+      <div class="kpi-label">Avg monthly growth</div>
+      <div class="kpi-value"><span class="badge ${avgMoM>=0?'up':'dn'}">${fmtPct(avgMoM)}</span></div>
+      <div class="kpi-sub">month-over-month avg</div>
+    </div>
+    <div class="kpi" style="--accent:#e3b341">
+      <div class="kpi-label">Top country</div>
+      <div class="kpi-value" style="font-size:15px;padding-top:4px">${topC?topC[0]:'—'}</div>
+      <div class="kpi-sub">${topC?fmt(topC[1]):''}</div>
+    </div>
+    ${data.isYTD?`<div class="kpi" style="--accent:#56d364">
+      <div class="kpi-label">${ytd} YTD (${ytdMoCount} mo)</div>
+      <div class="kpi-value">${fmt(ytdTotal)}</div>
+      <div class="kpi-sub">
+        <span class="badge ${ytdG>=0?'up':'dn'}">${fmtPct(ytdG)}</span>
+        vs Jan–${['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][ytdMoCount]} ${lcy}
+      </div>
+    </div>`:''}
+  `;
+
+  drawTrendChart('trendChart',mt);
+  drawCountryChart(branches,months);
+  drawYearChart(branches,data.allYears,data.ytdYear);
+  drawMoMChart('momChart',mt);
+}
+
+function drawTrendChart(canvasId,mt){
+  const key=canvasId==='trendChart'?'trend':'fullTrend';
+  destroyChart(key);
+  const shifted=[null,...mt.map(x=>x.v).slice(0,-1)];
+  CHARTS[key]=new Chart($(canvasId),{
+    type:'line',
+    data:{labels:mt.map(x=>x.m),datasets:[
+      {label:'Sales',data:mt.map(x=>x.v),borderColor:'#ff6b2b',backgroundColor:'#ff6b2b14',fill:true,tension:0.4,pointRadius:mt.length>30?0:2,borderWidth:2},
+      {label:'Prior',data:shifted.map(v=>v??null),borderColor:'#378add',backgroundColor:'transparent',fill:false,tension:0.4,pointRadius:0,borderWidth:1.5,borderDash:[5,3]}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmtFull(c.raw)}}},
+      scales:{x:{ticks:xTicksOpts(mt.length),grid:{color:'#21262d'}},
+              y:{ticks:{color:'#7d8590',font:{size:10},callback:v=>fmt(v)},grid:{color:'#21262d'}}}
+    }
+  });
+}
+
+function drawCountryChart(branches,months){
+  destroyChart('country');
+  const agg={};
+  branches.forEach(b=>{const t=months.reduce((s,m)=>s+(b.monthly[m]||0),0);agg[b.country]=(agg[b.country]||0)+t;});
+  const sorted=Object.entries(agg).sort((a,b)=>b[1]-a[1]);
+  $('cntryWrap').style.height=Math.max(200,sorted.length*36+60)+'px';
+  CHARTS['country']=new Chart($('countryChart'),{
+    type:'bar',
+    data:{labels:sorted.map(x=>x[0]),datasets:[{label:'Sales',data:sorted.map(x=>Math.round(x[1])),backgroundColor:sorted.map((_,i)=>COLORS[i%COLORS.length]+'bb'),borderRadius:3}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmtFull(c.raw)}}},
+      scales:{x:{ticks:{color:'#7d8590',font:{size:10},callback:v=>fmt(v)},grid:{color:'#21262d'}},
+              y:{ticks:{color:'#e6edf3',font:{size:11}},grid:{display:false}}}
+    }
+  });
+}
+
+function drawYearChart(branches,allYears,ytdYear){
+  destroyChart('year');
+  const yt=allYears.map(y=>({y,v:Math.round(sumYear(branches,y))}));
+  const lastY=allYears[allYears.length-1];
+  CHARTS['year']=new Chart($('yearChart'),{
+    type:'bar',
+    data:{labels:yt.map(x=>x.y),datasets:[{label:'Sales',data:yt.map(x=>x.v),
+      backgroundColor:yt.map(x=>x.y===lastY?'#ff6b2b':'#378add55'),
+      borderColor:yt.map(x=>x.y===lastY?'#e85d04':'#378add'),borderWidth:1,borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmtFull(c.raw)}}},
+      scales:{x:{ticks:{color:'#7d8590',font:{size:11}},grid:{display:false}},
+              y:{ticks:{color:'#7d8590',font:{size:10},callback:v=>fmt(v)},grid:{color:'#21262d'}}}
+    }
+  });
+}
+
+function drawMoMChart(canvasId,mt){
+  const key=canvasId;
+  destroyChart(key);
+  const active=mt.filter(x=>x.v>0);
+  const labels=[],vals=[],colors=[];
+  for(let i=1;i<active.length;i++){
+    const g=active[i-1].v>0?parseFloat(((active[i].v-active[i-1].v)/active[i-1].v*100).toFixed(1)):null;
+    labels.push(active[i].m);vals.push(g);
+    colors.push(g==null?'#7d859066':g>=0?'#3fb95099':'#f8514999');
+  }
+  CHARTS[key]=new Chart($(canvasId),{
+    type:'bar',
+    data:{labels,datasets:[{label:'MoM %',data:vals,backgroundColor:colors,borderRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmtPct(c.raw)}}},
+      scales:{
+        x:{ticks:xTicksOpts(labels.length),grid:{display:false}},
+        y:{ticks:{color:'#7d8590',font:{size:10},callback:v=>v+'%'},grid:{color:'#21262d'},
+          afterDataLimits:ax=>{const p=Math.max(Math.abs(ax.max),Math.abs(ax.min||0))*.2||5;ax.min-=p;ax.max+=p;}}
+      }
+    }
+  });
+}
+
+/* ══════ TAB 2: BRANCH PERFORMANCE ══════ */
+function renderPerformance(){
+  if(!DATA) return;
+  const year=$('perfYear').value;
+  const country=$('perfCountry').value;
+  const branches=country==='all'?DATA.branches:DATA.branches.filter(b=>b.country===country);
+  const prevYear=String(parseInt(year)-1);
+  const scored=branches.map(b=>{
+    const cur=sumYear([b],year),prev=sumYear([b],prevYear);
+    return {city:b.city,country:b.country,cur,prev,g:pct(cur,prev)};
+  }).filter(b=>b.cur>0).sort((a,b)=>b.cur-a.cur);
+  const maxVal=scored[0]?.cur||1;
+  const top10=scored.slice(0,10);
+  const bot10=[...scored].sort((a,b)=>a.cur-b.cur).slice(0,10).reverse();
+
+  destroyChart('top');destroyChart('bot');
+  const topH=Math.max(200,top10.length*36+60);
+  const botH=Math.max(200,bot10.length*36+60);
+  $('topWrap').style.height=topH+'px';
+  $('botWrap').style.height=botH+'px';
+
+  CHARTS['top']=new Chart($('topChart'),{type:'bar',
+    data:{labels:top10.map(b=>b.city),datasets:[{label:'Sales',data:top10.map(b=>Math.round(b.cur)),
+      backgroundColor:top10.map((_,i)=>i===0?'#ff6b2b':'#378add88'),borderRadius:3}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmtFull(c.raw)}}},
+      scales:{x:{ticks:{color:'#7d8590',font:{size:10},callback:v=>fmt(v)},grid:{color:'#21262d'}},
+              y:{ticks:{color:'#e6edf3',font:{size:11}},grid:{display:false}}}
+    }
+  });
+  CHARTS['bot']=new Chart($('botChart'),{type:'bar',
+    data:{labels:bot10.map(b=>b.city),datasets:[{label:'Sales',data:bot10.map(b=>Math.round(b.cur)),
+      backgroundColor:bot10.map((_,i)=>i===bot10.length-1?'#f85149':'#f8514955'),borderRadius:3}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmtFull(c.raw)}}},
+      scales:{x:{ticks:{color:'#7d8590',font:{size:10},callback:v=>fmt(v)},grid:{color:'#21262d'}},
+              y:{ticks:{color:'#e6edf3',font:{size:11}},grid:{display:false}}}
+    }
+  });
+
+  const body=$('perfBody');body.innerHTML='';
+  scored.forEach((b,i)=>{
+    const share=Math.round(b.cur/maxVal*100);
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td><span class="rank-badge rank-${i<3?i+1:''}">${i+1}</span></td>
+      <td><span class="branch-link" onclick="openBranchModal('${b.city.replace(/'/g,"\\'")}',event)">${b.city}</span></td>
+      <td style="color:#7d8590">${b.country}</td>
+      <td style="text-align:right;font-weight:500">${fmtFull(b.cur)}</td>
+      <td style="text-align:right"><span class="badge ${b.g==null?'neu':b.g>=0?'up':'dn'}">${fmtPct(b.g)}</span></td>
+      <td><div class="prog-bar"><div class="prog-fill" style="width:${share}%"></div></div><span style="font-size:10px;color:#7d8590"> ${share}%</span></td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+/* ══════ TAB 3: TRENDS ══════ */
+function renderTrends(){
+  if(!DATA) return;
+  const data=DATA;
+  const branchVal=$('trendBranch').value;
+  const period=parseInt($('trendPeriod').value)||99999;
+  const branches=branchVal==='all'?data.branches:data.branches.filter(b=>b.city===branchVal);
+  const months=data.allMonths.slice(-period);
+  $('trendLabel').textContent=branchVal==='all'?'all branches':branchVal;
+
+  const mt=months.map(m=>({m,v:Math.round(branches.reduce((s,b)=>s+(b.monthly[m]||0),0))}));
+  drawTrendChart('fullTrendChart',mt);
+  drawMoMChart('momFullChart',mt);
+  renderDecline(data);
+}
+
+function renderDecline(data){
+  const lcy=data.lastCompleteYear,pcy=data.prevCompleteYear;
+  $('declineYearLabel').textContent=lcy+' vs '+pcy;
+  const results=[];
+  data.branches.forEach(b=>{
+    const s1=sumYear([b],lcy),s2=sumYear([b],pcy);
+    if(s1>0&&s2>0){const p=pct(s1,s2);if(p<-5)results.push({city:b.city,country:b.country,p,s1,s2});}
+  });
+  results.sort((a,b)=>a.p-b.p);
+  $('declineCount').textContent=results.length;
+  const el=$('declineList');
+  if(!results.length){el.innerHTML='<div class="empty-state">No significantly declining branches</div>';return;}
+  el.innerHTML='';
+  results.slice(0,8).forEach(r=>{
+    const urgent=r.p<-15;
+    const div=document.createElement('div');
+    div.className='alert-row'+(urgent?'':' warn');
+    div.innerHTML=`<div style="flex:1;min-width:0"><div class="alert-name">${r.city}</div><div class="alert-detail">${r.country} · ${lcy}: ${fmt(r.s1)} vs ${pcy}: ${fmt(r.s2)}</div></div><div class="alert-pct${urgent?'':' warn'}">${r.p.toFixed(1)}%</div>`;
+    el.appendChild(div);
+  });
+}
+
+/* ══════ TAB 4: SUMMARY TABLE ══════ */
+function renderSummary(){
+  if(!DATA) return;
+  const data=DATA;
+  const branchF=$('sumBranch').value;
+  const monthF=$('sumMonth').value;
+  const countryF=$('sumCountry').value;
+  let branches=data.branches;
+  if(branchF!=='all') branches=branches.filter(b=>b.city===branchF);
+  if(countryF!=='all') branches=branches.filter(b=>b.country===countryF);
+  const months=monthF==='all'?data.allMonths:[monthF];
+  const lcy=data.lastCompleteYear,pcy=data.prevCompleteYear;
+
+  const rows=branches.map(b=>{
+    const total=months.reduce((s,m)=>s+(b.monthly[m]||0),0);
+    const actMos=months.filter(m=>b.monthly[m]>0).length;
+    const avg=actMos>0?total/actMos:0;
+    const cur=sumYear([b],lcy),prev=sumYear([b],pcy);
+    const g=pct(cur,prev);
+    const bestM=Object.entries(b.monthly).sort((a,c)=>c[1]-a[1])[0];
+    return {city:b.city,country:b.country,total,avg,g,bestM:bestM?bestM[0]:'—'};
+  }).filter(r=>r.total>0).sort((a,b)=>b.total-a.total);
+
+  const maxTotal=rows[0]?.total||1;
+  const body=$('summaryBody');body.innerHTML='';
+  rows.forEach((r,i)=>{
+    const share=Math.round(r.total/maxTotal*100);
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td><span class="rank-badge rank-${i<3?i+1:''}">${i+1}</span></td>
+      <td style="font-weight:500">${r.city}</td>
+      <td style="color:#7d8590">${r.country}</td>
+      <td style="text-align:right;font-weight:600">${fmtFull(r.total)}</td>
+      <td style="text-align:right;color:#7d8590">${fmtFull(r.avg)}</td>
+      <td style="text-align:right"><span class="badge ${r.g==null?'neu':r.g>=0?'up':'dn'}">${fmtPct(r.g)}</span></td>
+      <td style="text-align:right;color:#7d8590">${r.bestM}</td>
+      <td><div class="prog-bar"><div class="prog-fill" style="width:${share}%"></div></div><span style="font-size:10px;color:#7d8590"> ${share}%</span></td>
+      <td><span class="branch-link" onclick="openBranchModal('${r.city.replace(/'/g,"\\'")}',event)">View</span></td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+/* ══════ TAB 5: ALL BRANCHES — shows every year dynamically ══════ */
+function renderAllBranches(){
+  if(!DATA) return;
+  const data=DATA;
+  const countryF=$('allBranchCountry').value;
+  const statusF=$('allBranchStatus').value;
+  const sortF=$('allBranchSort').value;
+
+  let branches=data.branches;
+  if(countryF!=='all') branches=branches.filter(b=>b.country===countryF);
+
+  const allYears=data.allYears; /* e.g. ['2020','2021','2022','2023','2024','2025','2026'] */
+  const lcy=data.lastCompleteYear;
+  const pcy=data.prevCompleteYear;
+
+  const rows=branches.map(b=>{
+    const allM=Object.keys(b.monthly).sort();
+    const since=allM[0]||'—';
+    const lastM=allM[allM.length-1]||'—';
+    const total=Object.values(b.monthly).reduce((s,v)=>s+v,0);
+    const yearSales={};
+    allYears.forEach(y=>{ yearSales[y]=sumYear([b],y); });
+    const sLCY=yearSales[lcy]||0, sPCY=yearSales[pcy]||0;
+    const g=pct(sLCY,sPCY);
+    const isActive26=allM.some(m=>m.startsWith('2026'));
+    const isActive25=allM.some(m=>m.startsWith('2025'));
+    const status=isActive26?'active':isActive25?'recent':'inactive';
+    return {city:b.city,country:b.country,since,lastM,total,yearSales,g,status,lcy,pcy};
+  });
+
+  let filtered=rows;
+  if(statusF!=='all') filtered=filtered.filter(r=>r.status===statusF);
+  if(sortF==='sales') filtered.sort((a,b)=>b.total-a.total);
+  else if(sortF==='growth') filtered.sort((a,b)=>(b.g??-999)-(a.g??-999));
+  else filtered.sort((a,b)=>a.city.localeCompare(b.city));
+
+  /* rebuild table header with all years */
+  const thead=document.querySelector('#allBranchBody').closest('table').querySelector('thead tr');
+  thead.innerHTML=`
+    <th>#</th>
+    <th>Branch</th><th>Country</th>
+    <th style="text-align:right">Since</th>
+    <th style="text-align:right">Last Month</th>
+    <th style="text-align:right">Total Sales</th>
+    ${allYears.map(y=>`<th style="text-align:right">${y}${y===lcy?' ★':y===data.ytdYear&&data.isYTD?' YTD':''}</th>`).join('')}
+    <th style="text-align:right">Growth %<br><span style="font-size:9px;font-weight:400">${lcy} vs ${pcy}</span></th>
+    <th>Status</th><th>Detail</th>
+  `;
+
+  const body=$('allBranchBody');body.innerHTML='';
+  filtered.forEach((r,i)=>{
+    const statusColor=r.status==='active'?'#3fb950':r.status==='recent'?'#e3b341':'#f85149';
+    const statusLabel=r.status==='active'?'Active 2026':r.status==='recent'?'Recent 2025':'Inactive';
+    const yearCells=allYears.map(y=>{
+      const v=r.yearSales[y]||0;
+      const isLCY=y===lcy;
+      return `<td style="text-align:right${isLCY?';font-weight:600':';color:#7d8590'}">${v>0?fmtFull(v):'—'}</td>`;
+    }).join('');
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td style="color:#7d8590">${i+1}</td>
+      <td style="font-weight:500">${r.city}</td>
+      <td style="color:#7d8590">${r.country}</td>
+      <td style="text-align:right;color:#7d8590">${r.since}</td>
+      <td style="text-align:right;color:#7d8590">${r.lastM}</td>
+      <td style="text-align:right;font-weight:600">${fmtFull(r.total)}</td>
+      ${yearCells}
+      <td style="text-align:right"><span class="badge ${r.g==null?'neu':r.g>=0?'up':'dn'}">${fmtPct(r.g)}</span></td>
+      <td><span style="color:${statusColor};font-size:11px;font-weight:600">${statusLabel}</span></td>
+      <td><span class="branch-link" onclick="openBranchModal('${r.city.replace(/'/g,"\\'")}',event)">View</span></td>
+    `;
+    body.appendChild(tr);
+  });
+}
+
+/* ══════ BRANCH DETAIL MODAL ══════ */
+let modalCharts={};
+
+function openBranchModal(city,e){
+  if(e) e.stopPropagation();
+  if(!DATA) return;
+  const b=DATA.branches.find(x=>x.city===city);
+  if(!b) return;
+
+  const allM=Object.keys(b.monthly).sort();
+  const total=Object.values(b.monthly).reduce((s,v)=>s+v,0);
+  const since=allM[0]||'—';
+  const lastMo=allM[allM.length-1]||'—';
+  const activeMonths=allM.length;
+  const avg=activeMonths>0?total/activeMonths:0;
+  const lcy=DATA.lastCompleteYear,pcy=DATA.prevCompleteYear;
+  const sLCY=sumYear([b],lcy),sPCY=sumYear([b],pcy);
+  const growth=pct(sLCY,sPCY);
+  const peakEntry=Object.entries(b.monthly).sort((a,c)=>c[1]-a[1])[0];
+  const peak=peakEntry?peakEntry[1]:0;
+
+  $('modalTitle').textContent=city;
+  $('modalSub').textContent=b.country+' · Open since '+since+' · Last data: '+lastMo;
+
+  $('modalKpis').innerHTML=`
+    <div class="modal-kpi">
+      <div class="modal-kpi-label">All-time sales</div>
+      <div class="modal-kpi-value">${fmt(total)}</div>
+      <div class="modal-kpi-sub">${activeMonths} months of data</div>
+    </div>
+    <div class="modal-kpi">
+      <div class="modal-kpi-label">Monthly average</div>
+      <div class="modal-kpi-value">${fmt(avg)}</div>
+      <div class="modal-kpi-sub">per active month</div>
+    </div>
+    <div class="modal-kpi">
+      <div class="modal-kpi-label">${lcy} (full year)</div>
+      <div class="modal-kpi-value">${fmt(sLCY)}</div>
+      <div class="modal-kpi-sub"><span class="badge ${growth>=0?'up':'dn'}">${fmtPct(growth)}</span> vs ${pcy}</div>
+    </div>
+    <div class="modal-kpi">
+      <div class="modal-kpi-label">Peak month</div>
+      <div class="modal-kpi-value">${fmt(peak)}</div>
+      <div class="modal-kpi-sub">${peakEntry?peakEntry[0]:'—'}</div>
+    </div>
+  `;
+
+  /* destroy old modal charts */
+  ['mTrend','mYear','mMom'].forEach(k=>{if(modalCharts[k]){try{modalCharts[k].destroy();}catch(e){}delete modalCharts[k];}});
+
+  /* trend chart — full history */
+  const mt=allM.map(m=>({m,v:Math.round(b.monthly[m]||0)}));
+  modalCharts['mTrend']=new Chart($('modalTrendChart'),{
+    type:'line',
+    data:{labels:mt.map(x=>x.m),datasets:[{
+      label:'Sales',data:mt.map(x=>x.v),borderColor:'#ff6b2b',
+      backgroundColor:'#ff6b2b18',fill:true,tension:0.4,
+      pointRadius:mt.length>36?0:3,borderWidth:2
+    }]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmtFull(c.raw)}}},
+      scales:{x:{ticks:xTicksOpts(mt.length),grid:{color:'#30363d'}},
+              y:{ticks:{color:'#7d8590',font:{size:10},callback:v=>fmt(v)},grid:{color:'#30363d'}}}
+    }
+  });
+
+  /* year chart */
+  const years=DATA.allYears;
+  const yt=years.map(y=>({y,v:Math.round(sumYear([b],y))})).filter(x=>x.v>0);
+  modalCharts['mYear']=new Chart($('modalYearChart'),{
+    type:'bar',
+    data:{labels:yt.map(x=>x.y),datasets:[{label:'Sales',data:yt.map(x=>x.v),
+      backgroundColor:yt.map(x=>x.y===DATA.ytdYear?'#e3b341':x.y===lcy?'#ff6b2b':'#378add88'),
+      borderRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmtFull(c.raw)}}},
+      scales:{x:{ticks:{color:'#7d8590',font:{size:10}},grid:{display:false}},
+              y:{ticks:{color:'#7d8590',font:{size:10},callback:v=>fmt(v)},grid:{color:'#30363d'}}}
+    }
+  });
+
+  /* MoM chart */
+  const momL=[],momV=[],momC=[];
+  for(let i=1;i<mt.length;i++){
+    const g=mt[i-1].v>0?parseFloat(((mt[i].v-mt[i-1].v)/mt[i-1].v*100).toFixed(1)):null;
+    momL.push(mt[i].m);momV.push(g);
+    momC.push(g==null?'#7d859066':g>=0?'#3fb95099':'#f8514999');
+  }
+  modalCharts['mMom']=new Chart($('modalMomChart'),{
+    type:'bar',
+    data:{labels:momL,datasets:[{label:'MoM %',data:momV,backgroundColor:momC,borderRadius:2}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmtPct(c.raw)}}},
+      scales:{x:{ticks:xTicksOpts(momL.length),grid:{display:false}},
+              y:{ticks:{color:'#7d8590',font:{size:9},callback:v=>v+'%'},grid:{color:'#30363d'},
+                afterDataLimits:ax=>{const p=Math.max(Math.abs(ax.max),Math.abs(ax.min||0))*.2||5;ax.min-=p;ax.max+=p;}}}
+    }
+  });
+
+  /* monthly breakdown table */
+  const tbody=$('modalTableBody');tbody.innerHTML='';
+  const peakV=peak||1;
+  [...mt].reverse().forEach((row,i)=>{
+    const prev=mt[mt.length-2-i];
+    const g=prev&&prev.v>0?pct(row.v,prev.v):null;
+    const share=Math.round(row.v/peakV*100);
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td style="color:#7d8590">${row.m}</td>
+      <td style="text-align:right;font-weight:500">${fmtFull(row.v)}</td>
+      <td style="text-align:right"><span class="badge ${g==null?'neu':g>=0?'up':'dn'}">${fmtPct(g)}</span></td>
+      <td><div class="prog-bar"><div class="prog-fill" style="width:${share}%"></div></div></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  $('branchModal').classList.add('open');
+}
+
+function closeModal(){
+  $('branchModal').classList.remove('open');
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape') closeModal();});
+</script>
+</body>
+</html>
