@@ -1267,18 +1267,113 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape') closeModal();});
 </script>
 </div><!-- /app-shell -->
 
-<!-- ══ LOGIN LOGIC ══ -->
+<!-- ══ LOGIN LOGIC + ROLE-BASED ACCESS ══ -->
 <script>
-/* ── CREDENTIALS — change username/password here ── */
+/* ════════════════════════════════════════════════
+   USERS & ROLES — edit here to add/change users
+   countries: null = all countries (Admin)
+   countries: ['Iraq'] = restricted to those only
+   label: shown in topbar after login
+════════════════════════════════════════════════ */
 const USERS={
-  'firefly.admin': 'FF@2026!secure',
-  'mahmoud':       'MF#Brand2026',
-  'viewer':        'view@only99'
+  'mahmoud':{
+    password:'MF#Brand2026',
+    label:'Mahmoud Fassi — Admin',
+    countries:null,          /* null = full access */
+    role:'admin'
+  },
+  'iraq.manager':{
+    password:'Iraq@2026',
+    label:'Iraq Development Manager',
+    countries:['Iraq'],
+    role:'regional'
+  },
+  'me.manager':{
+    password:'ME@2026',
+    label:'Middle East Manager',
+    countries:['Iraq','Qatar','Kuwait','Saudi Arabia','Emirates','Lebanon','Palestine'],
+    role:'regional'
+  },
+  'us.manager':{
+    password:'US@2026',
+    label:'Americas Manager',
+    countries:['USA','CANADA'],
+    role:'regional'
+  },
+  'au.manager':{
+    password:'AU@2026',
+    label:'Australia Manager',
+    countries:['Australia'],
+    role:'regional'
+  }
 };
+
+/* active session */
+let CURRENT_USER=null;
 
 const MAX_ATTEMPTS=5;
 const LOCK_MINUTES=5;
 let attempts=0, locked=false, lockEnd=null;
+
+/* ── apply role restrictions after data loads ── */
+function applyRoleRestrictions(userData){
+  if(!userData||userData.countries===null) return; /* admin — no limits */
+
+  const allowed=userData.countries;
+
+  /* lock country filter to allowed only */
+  const ovSel=$('ovCountry');
+  if(ovSel){
+    Array.from(ovSel.options).forEach(opt=>{
+      if(opt.value!=='all'&&!allowed.includes(opt.value)) opt.remove();
+    });
+    /* remove exclude buttons for countries not in scope */
+    document.querySelectorAll('.excl-btn').forEach(btn=>{
+      if(!allowed.includes(btn.dataset.country)) btn.style.display='none';
+    });
+  }
+
+  /* lock performance/summary selects */
+  ['perfCountry','sumCountry','allBranchCountry'].forEach(id=>{
+    const sel=$(id);
+    if(!sel) return;
+    Array.from(sel.options).forEach(opt=>{
+      if(opt.value!=='all'&&!allowed.includes(opt.value)) opt.remove();
+    });
+  });
+
+  /* filter branches globally so all tabs only show allowed countries */
+  if(DATA){
+    DATA.branches=DATA.branches.filter(b=>allowed.includes(b.country));
+    /* rebuild country list */
+    DATA.countries=[...new Set(DATA.branches.map(b=>b.country))].sort();
+    /* re-render all tabs with restricted data */
+    renderOverview(DATA,activeYear);
+    renderPerformance();
+    renderTrends();
+    renderSummary();
+    renderAllBranches();
+    /* update meta */
+    $('dashMeta').textContent=`${DATA.branches.length} branches · ${DATA.countries.length} ${DATA.countries.length===1?'country':'countries'} · ${DATA.allMonths[0]} → ${DATA.allMonths[DATA.allMonths.length-1]}`;
+  }
+
+  /* hide year filter buttons that have no data */
+  document.querySelectorAll('#yearFilter .filter-btn').forEach(btn=>{
+    if(btn.textContent!=='All years'){
+      const y=btn.textContent;
+      const hasData=DATA&&DATA.branches.some(b=>Object.keys(b.monthly).some(m=>m.startsWith(y)));
+      if(!hasData) btn.style.display='none';
+    }
+  });
+}
+
+/* show role badge in topbar */
+function showRoleBadge(userData){
+  const el=$('last-updated');
+  if(!el) return;
+  const roleColor=userData.role==='admin'?'#ff6b2b':'#378add';
+  el.innerHTML=`<span style="background:${roleColor}22;color:${roleColor};border:1px solid ${roleColor}44;border-radius:5px;padding:2px 8px;font-size:11px;font-weight:600">${userData.label}</span>`;
+}
 
 function doLogin(){
   if(locked){
@@ -1286,16 +1381,21 @@ function doLogin(){
     if(left>0){showTimer(left);return;}
     else unlockForm();
   }
-  const user=($('loginUser').value||'').trim();
-  const pass=($('loginPass').value||'').trim();
-  if(!user||!pass){showError('Please enter username and password.');return;}
+  const username=($('loginUser').value||'').trim();
+  const password=($('loginPass').value||'').trim();
+  if(!username||!password){showError('Please enter username and password.');return;}
 
-  if(USERS[user]&&USERS[user]===pass){
+  const userData=USERS[username];
+  if(userData&&userData.password===password){
+    CURRENT_USER={...userData,username};
     $('loginScreen').style.display='none';
     $('appShell').style.display='block';
     sessionStorage.setItem('ff_auth','1');
-    sessionStorage.setItem('ff_user',user);
-    setTimeout(()=>autoLoadFromGitHub(),200);
+    sessionStorage.setItem('ff_user',JSON.stringify(CURRENT_USER));
+    showRoleBadge(CURRENT_USER);
+    setTimeout(()=>{
+      autoLoadFromGitHub().then(()=>applyRoleRestrictions(CURRENT_USER));
+    },200);
   } else {
     attempts++;
     const left=MAX_ATTEMPTS-attempts;
@@ -1348,11 +1448,31 @@ function logout(){
   location.reload();
 }
 
-/* check existing session */
+/* also make autoLoadFromGitHub return a Promise so we can chain applyRoleRestrictions */
+const _origAuto=autoLoadFromGitHub;
+autoLoadFromGitHub=function(){
+  return new Promise(resolve=>{
+    const orig_init=initDashboard;
+    initDashboard=function(data){
+      orig_init(data);
+      initDashboard=orig_init;
+      resolve();
+    };
+    _origAuto();
+  });
+};
+
+/* check existing session on page load */
 if(sessionStorage.getItem('ff_auth')==='1'){
+  try{
+    CURRENT_USER=JSON.parse(sessionStorage.getItem('ff_user'));
+  }catch(e){CURRENT_USER=null;}
   $('loginScreen').style.display='none';
   $('appShell').style.display='block';
-  setTimeout(()=>autoLoadFromGitHub(),200);
+  if(CURRENT_USER) showRoleBadge(CURRENT_USER);
+  setTimeout(()=>{
+    autoLoadFromGitHub().then(()=>applyRoleRestrictions(CURRENT_USER));
+  },200);
 } else {
   setTimeout(()=>$('loginUser').focus(),300);
 }
