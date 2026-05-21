@@ -392,9 +392,9 @@ tr:hover td{background:#f8fafc}
       <label style="margin-left:8px">Status</label>
       <select id="allBranchStatus" onchange="renderAllBranches()">
         <option value="all">All</option>
-        <option value="active">Active (2026)</option>
-        <option value="recent">Recent (2025)</option>
-        <option value="inactive">Inactive</option>
+        <option value="active">🟢 Active 2026</option>
+        <option value="recent">🟡 Recent 2025</option>
+        <option value="inactive">🔴 Inactive / Closed</option>
       </select>
       <label style="margin-left:8px">Sort by</label>
       <select id="allBranchSort" onchange="renderAllBranches()">
@@ -1153,7 +1153,7 @@ function renderSummary(){
   });
 }
 
-/* ══════ TAB 5: ALL BRANCHES — shows every year dynamically ══════ */
+/* ══════ TAB 5: ALL BRANCHES — accurate status based on real last-month data ══════ */
 function renderAllBranches(){
   if(!DATA) return;
   const data=DATA;
@@ -1164,9 +1164,14 @@ function renderAllBranches(){
   let branches=data.branches;
   if(countryF!=='all') branches=branches.filter(b=>b.country===countryF);
 
-  const allYears=data.allYears; /* e.g. ['2020','2021','2022','2023','2024','2025','2026'] */
+  const allYears=data.allYears;
   const lcy=data.lastCompleteYear;
   const pcy=data.prevCompleteYear;
+
+  /* Find the actual latest month with data across all branches */
+  const latestDataMonth=data.allMonths.filter(m=>
+    data.branches.some(b=>b.monthly[m]>0)
+  ).slice(-1)[0]||'2026-03';
 
   const rows=branches.map(b=>{
     const allM=Object.keys(b.monthly).sort();
@@ -1174,17 +1179,30 @@ function renderAllBranches(){
     const lastM=allM[allM.length-1]||'—';
     const total=Object.values(b.monthly).reduce((s,v)=>s+v,0);
     const yearSales={};
-    allYears.forEach(y=>{ yearSales[y]=sumYear([b],y); });
+    allYears.forEach(y=>{ yearSales[y]=Math.round(sumYear([b],y)); });
     const sLCY=yearSales[lcy]||0, sPCY=yearSales[pcy]||0;
     const g=pct(sLCY,sPCY);
-    const isActive26=allM.some(m=>m.startsWith('2026'));
-    const isActive25=allM.some(m=>m.startsWith('2025'));
-    const status=isActive26?'active':isActive25?'recent':'inactive';
-    return {city:b.city,country:b.country,since,lastM,total,yearSales,g,status,lcy,pcy};
+
+    /* Precise status:
+       - Active 2026: has sales in 2026
+       - Recent 2025: last sale in 2025
+       - Inactive 2024: last sale in 2024
+       - Closed: last sale before 2024 */
+    const lastYear=lastM.slice(0,4);
+    let status, statusLabel, statusColor;
+    if(lastYear==='2026'){ status='active'; statusLabel='🟢 Active 2026'; statusColor='#15803d'; }
+    else if(lastYear==='2025'){ status='recent'; statusLabel='🟡 Recent 2025'; statusColor='#d97706'; }
+    else if(lastYear==='2024'){ status='inactive'; statusLabel='🟠 Stopped 2024'; statusColor='#c2410c'; }
+    else { status='inactive'; statusLabel='🔴 Closed '+lastYear; statusColor='#dc2626'; }
+
+    return {city:b.city,country:b.country,since,lastM,total,yearSales,g,status,statusLabel,statusColor,lcy,pcy};
   });
 
   let filtered=rows;
-  if(statusF!=='all') filtered=filtered.filter(r=>r.status===statusF);
+  if(statusF==='active') filtered=filtered.filter(r=>r.status==='active');
+  else if(statusF==='recent') filtered=filtered.filter(r=>r.status==='recent');
+  else if(statusF==='inactive') filtered=filtered.filter(r=>r.status==='inactive');
+
   if(sortF==='sales') filtered.sort((a,b)=>b.total-a.total);
   else if(sortF==='growth') filtered.sort((a,b)=>(b.g??-999)-(a.g??-999));
   else filtered.sort((a,b)=>a.city.localeCompare(b.city));
@@ -1204,24 +1222,25 @@ function renderAllBranches(){
 
   const body=$('allBranchBody');body.innerHTML='';
   filtered.forEach((r,i)=>{
-    const statusColor=r.status==='active'?'#3fb950':r.status==='recent'?'#e3b341':'#f85149';
-    const statusLabel=r.status==='active'?'Active 2026':r.status==='recent'?'Recent 2025':'Inactive';
     const yearCells=allYears.map(y=>{
       const v=r.yearSales[y]||0;
       const isLCY=y===lcy;
-      return `<td style="text-align:right${isLCY?';font-weight:600':';color:#7d8590'}">${v>0?fmtFull(v):'—'}</td>`;
+      const isYTD=y===data.ytdYear&&data.isYTD;
+      return `<td style="text-align:right${isLCY?';font-weight:700;color:#0f172a':isYTD?';color:#d97706;font-weight:600':';color:#64748b'}">${v>0?fmtFull(v):'—'}</td>`;
     }).join('');
+    /* highlight last month in red if inactive */
+    const lastMStyle=r.status==='inactive'?'color:#dc2626;font-weight:600':'color:#64748b';
     const tr=document.createElement('tr');
     tr.innerHTML=`
-      <td style="color:#7d8590">${i+1}</td>
-      <td style="font-weight:500">${r.city}</td>
-      <td style="color:#7d8590">${r.country}</td>
-      <td style="text-align:right;color:#7d8590">${r.since}</td>
-      <td style="text-align:right;color:#7d8590">${r.lastM}</td>
-      <td style="text-align:right;font-weight:600">${fmtFull(r.total)}</td>
+      <td style="color:#94a3b8">${i+1}</td>
+      <td style="font-weight:600;color:#0f172a">${r.city}</td>
+      <td style="color:#64748b">${r.country}</td>
+      <td style="text-align:right;color:#64748b;font-size:11px">${r.since}</td>
+      <td style="text-align:right;font-size:11px;${lastMStyle}">${r.lastM}</td>
+      <td style="text-align:right;font-weight:700">${fmtFull(r.total)}</td>
       ${yearCells}
       <td style="text-align:right"><span class="badge ${r.g==null?'neu':r.g>=0?'up':'dn'}">${fmtPct(r.g)}</span></td>
-      <td><span style="color:${statusColor};font-size:11px;font-weight:600">${statusLabel}</span></td>
+      <td><span style="color:${r.statusColor};font-size:11px;font-weight:600;white-space:nowrap">${r.statusLabel}</span></td>
       <td><span class="branch-link" onclick="openBranchModal('${r.city.replace(/'/g,"\\'")}',event)">View</span></td>
     `;
     body.appendChild(tr);
@@ -1397,29 +1416,36 @@ function renderMonthlyTrend(){
     kpisDiv.appendChild(div);
   });
 
-  /* monthly breakdown table */
+  /* monthly breakdown table — months as columns (Jan→Dec), years as rows */
   const thead=$('mtTableHead'); const tbody=$('mtTableBody');
-  thead.innerHTML=`<tr><th>Month</th>${activeYearsSorted.map(y=>{
-    const colorIdx=data.allYears.indexOf(y);
-    return `<th style="text-align:right;color:${MT_COLORS[colorIdx%MT_COLORS.length]}">${y}</th><th style="text-align:right;color:#94a3b8;font-size:10px">MoM%</th>`;
-  }).join('')}</tr>`;
+
+  /* Header: Month label + 12 month columns */
+  thead.innerHTML=`<tr>
+    <th style="min-width:70px">Year</th>
+    ${MT_MONTHS_LABELS.map(m=>`<th style="text-align:right;min-width:80px">${m}</th>`).join('')}
+    <th style="text-align:right;min-width:90px">Total</th>
+  </tr>`;
+
   tbody.innerHTML='';
-  const prevMonthVals={};
-  MT_MONTHS_LABELS.forEach((mo,mi)=>{
-    const tr=document.createElement('tr');
-    let cells=`<td style="font-weight:600;color:#374151">${mo}</td>`;
-    activeYearsSorted.forEach(y=>{
-      const colorIdx=data.allYears.indexOf(y);
-      const color=MT_COLORS[colorIdx%MT_COLORS.length];
+  activeYearsSorted.forEach((y,i)=>{
+    const colorIdx=data.allYears.indexOf(y);
+    const color=MT_COLORS[colorIdx%MT_COLORS.length];
+    const isYTD=y===data.ytdYear&&data.isYTD;
+
+    let yearTotal=0;
+    const cells=MT_MONTHS_LABELS.map((mo,mi)=>{
       const monthKey=y+'-'+String(mi+1).padStart(2,'0');
       const v=Math.round(branches.reduce((s,b)=>s+(b.monthly[monthKey]||0),0));
-      const prev=prevMonthVals[y]||0;
-      const g=prev>0?pct(v,prev):null;
-      prevMonthVals[y]=v;
-      cells+=`<td style="text-align:right;font-weight:500;color:${v>0?'#0f172a':'#cbd5e1'}">${v>0?fmtFull(v):'—'}</td>`;
-      cells+=`<td style="text-align:right">${g!=null?`<span class="badge ${g>=0?'up':'dn'}" style="font-size:10px">${fmtPct(g)}</span>`:'—'}</td>`;
-    });
-    tr.innerHTML=cells;
+      if(v>0) yearTotal+=v;
+      return `<td style="text-align:right;font-size:12px;${v>0?'color:#0f172a':'color:#cbd5e1'}">${v>0?fmtFull(v):'—'}</td>`;
+    }).join('');
+
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td style="font-weight:700;color:${color};white-space:nowrap">${y}${isYTD?' YTD':''}</td>
+      ${cells}
+      <td style="text-align:right;font-weight:700;color:${color}">${fmtFull(yearTotal)}</td>
+    `;
     tbody.appendChild(tr);
   });
 }
