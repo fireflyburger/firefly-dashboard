@@ -229,6 +229,7 @@ tr:hover td{background:#f8fafc}
     <button class="nav-tab active" onclick="switchTab('overview',this)">Overview</button>
     <button class="nav-tab" onclick="switchTab('performance',this)">Branch Performance</button>
     <button class="nav-tab" onclick="switchTab('trends',this)">Trends</button>
+    <button class="nav-tab" onclick="switchTab('monthly-trend',this)">📈 Monthly Trend</button>
     <button class="nav-tab" onclick="switchTab('summary',this)">Summary Table</button>
     <button class="nav-tab" onclick="switchTab('branches',this)">All Branches</button>
   </div>
@@ -418,6 +419,63 @@ tr:hover td{background:#f8fafc}
           <tbody id="allBranchBody"></tbody>
         </table>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TAB: MONTHLY TREND ══ -->
+<div class="tab-panel" id="tab-monthly-trend" style="padding:0 24px 40px">
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:0 1px 3px rgba(15,23,42,.04)">
+    <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+      <div>
+        <label style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px">Branch</label>
+        <select id="mtBranch" onchange="renderMonthlyTrend()" style="background:#f8fafc;border:1px solid #e2e8f0;color:#374151;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;min-width:180px">
+          <option value="all">All branches (total)</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px">Country</label>
+        <select id="mtCountry" onchange="onMtCountryChange()" style="background:#f8fafc;border:1px solid #e2e8f0;color:#374151;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer;min-width:150px">
+          <option value="all">All countries</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px">Years to show</label>
+        <div id="mtYearToggles" style="display:flex;gap:5px;flex-wrap:wrap"></div>
+      </div>
+      <div style="margin-left:auto">
+        <label style="font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px">Chart type</label>
+        <div style="display:flex;gap:4px">
+          <button id="mtTypeLine" onclick="setMtType('line')" style="padding:5px 12px;border-radius:5px;border:1px solid #ff6b2b;background:#ff6b2b;color:#fff;font-size:11px;cursor:pointer">Line</button>
+          <button id="mtTypeBar" onclick="setMtType('bar')" style="padding:5px 12px;border-radius:5px;border:1px solid #e2e8f0;background:#f8fafc;color:#64748b;font-size:11px;cursor:pointer">Bar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main multi-year line chart -->
+  <div class="card mb">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div class="card-title" style="margin-bottom:0">Monthly sales — all years overlaid</div>
+      <div id="mtBranchLabel" style="font-size:12px;color:#ff6b2b;font-weight:600"></div>
+    </div>
+    <div id="mtLegend" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px"></div>
+    <div class="chart-wrap" style="height:320px">
+      <canvas id="mtMainChart" role="img" aria-label="Monthly trend multi-year">Monthly trend</canvas>
+    </div>
+  </div>
+
+  <!-- KPI row per year -->
+  <div id="mtYearKpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px"></div>
+
+  <!-- Monthly breakdown table -->
+  <div class="card">
+    <div class="card-title">Monthly detail — year by year</div>
+    <div style="overflow-x:auto">
+      <table id="mtTable">
+        <thead id="mtTableHead"></thead>
+        <tbody id="mtTableBody"></tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -680,6 +738,7 @@ function initDashboard(data){
   buildYearFilter(data);
   buildOverviewFilters(data);
   populateSelects(data);
+  initMonthlyTrend(data);
   renderOverview(data,'all');
   renderPerformance();
   renderTrends();
@@ -1166,6 +1225,202 @@ function renderAllBranches(){
       <td><span class="branch-link" onclick="openBranchModal('${r.city.replace(/'/g,"\\'")}',event)">View</span></td>
     `;
     body.appendChild(tr);
+  });
+}
+
+/* ══════ TAB: MONTHLY TREND ══════ */
+const MT_COLORS=['#e85d04','#2563eb','#6b7280','#d97706','#dc2626','#0f172a','#7c3aed','#059669'];
+const MT_MONTHS_LABELS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+let mtActiveYears=new Set();
+let mtChartType='line';
+
+function initMonthlyTrend(data){
+  /* populate branch select */
+  const bs=$('mtBranch');
+  bs.innerHTML='<option value="all">All branches (total)</option>';
+  data.branches.forEach(b=>{
+    const o=document.createElement('option');
+    o.value=b.city; o.textContent=b.city+' ('+b.country+')';
+    bs.appendChild(o);
+  });
+  /* populate country select */
+  const cs=$('mtCountry');
+  cs.innerHTML='<option value="all">All countries</option>';
+  data.countries.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;cs.appendChild(o);});
+  /* year toggles */
+  mtActiveYears=new Set(data.allYears);
+  buildMtYearToggles(data.allYears);
+  renderMonthlyTrend();
+}
+
+function buildMtYearToggles(years){
+  const div=$('mtYearToggles'); div.innerHTML='';
+  years.forEach((y,i)=>{
+    const btn=document.createElement('button');
+    btn.id='mty-'+y;
+    btn.textContent=y;
+    btn.style.cssText=`padding:4px 11px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;border:2px solid ${MT_COLORS[i%MT_COLORS.length]};background:${MT_COLORS[i%MT_COLORS.length]};color:#fff;transition:opacity .15s`;
+    btn.onclick=()=>toggleMtYear(y,btn,i);
+    div.appendChild(btn);
+  });
+}
+
+function toggleMtYear(y,btn,colorIdx){
+  if(mtActiveYears.has(y)){
+    if(mtActiveYears.size<=1) return; /* keep at least 1 */
+    mtActiveYears.delete(y);
+    btn.style.background='transparent';
+    btn.style.color=MT_COLORS[colorIdx%MT_COLORS.length];
+  } else {
+    mtActiveYears.add(y);
+    btn.style.background=MT_COLORS[colorIdx%MT_COLORS.length];
+    btn.style.color='#fff';
+  }
+  renderMonthlyTrend();
+}
+
+function setMtType(type){
+  mtChartType=type;
+  $('mtTypeLine').style.background=type==='line'?'#ff6b2b':'#f8fafc';
+  $('mtTypeLine').style.color=type==='line'?'#fff':'#64748b';
+  $('mtTypeLine').style.borderColor=type==='line'?'#ff6b2b':'#e2e8f0';
+  $('mtTypeBar').style.background=type==='bar'?'#ff6b2b':'#f8fafc';
+  $('mtTypeBar').style.color=type==='bar'?'#fff':'#64748b';
+  $('mtTypeBar').style.borderColor=type==='bar'?'#ff6b2b':'#e2e8f0';
+  renderMonthlyTrend();
+}
+
+function onMtCountryChange(){
+  /* reset branch select to "all" when country changes */
+  const country=$('mtCountry').value;
+  const bs=$('mtBranch');
+  bs.innerHTML='<option value="all">All branches (total)</option>';
+  if(!DATA) return;
+  const filtered=country==='all'?DATA.branches:DATA.branches.filter(b=>b.country===country);
+  filtered.forEach(b=>{
+    const o=document.createElement('option');o.value=b.city;
+    o.textContent=b.city+(country==='all'?' ('+b.country+')':'');
+    bs.appendChild(o);
+  });
+  renderMonthlyTrend();
+}
+
+function renderMonthlyTrend(){
+  if(!DATA) return;
+  const data=DATA;
+  const branchVal=$('mtBranch').value;
+  const country=$('mtCountry').value;
+
+  /* select branches */
+  let branches=data.branches;
+  if(country!=='all') branches=branches.filter(b=>b.country===country);
+  if(branchVal!=='all') branches=branches.filter(b=>b.city===branchVal);
+
+  const label=branchVal==='all'?(country==='all'?'All branches':country):branchVal;
+  $('mtBranchLabel').textContent=label;
+
+  const activeYearsSorted=[...mtActiveYears].sort();
+
+  /* build datasets: one per year, x-axis = Jan..Dec */
+  const datasets=activeYearsSorted.map((y,i)=>{
+    const colorIdx=data.allYears.indexOf(y);
+    const color=MT_COLORS[colorIdx%MT_COLORS.length];
+    const vals=Array.from({length:12},(_,mo)=>{
+      const monthKey=y+'-'+String(mo+1).padStart(2,'0');
+      const v=branches.reduce((s,b)=>s+(b.monthly[monthKey]||0),0);
+      return v>0?Math.round(v):null;
+    });
+    return {
+      label:y, data:vals, borderColor:color,
+      backgroundColor:mtChartType==='line'?color+'18':color+'cc',
+      fill:false, tension:0.4,
+      pointRadius:5, pointHoverRadius:7,
+      borderWidth:2.5,
+      borderDash:y===data.ytdYear&&data.isYTD?[5,3]:[],
+    };
+  });
+
+  /* build legend */
+  const legendDiv=$('mtLegend'); legendDiv.innerHTML='';
+  activeYearsSorted.forEach((y,i)=>{
+    const colorIdx=data.allYears.indexOf(y);
+    const color=MT_COLORS[colorIdx%MT_COLORS.length];
+    const isYTD=y===data.ytdYear&&data.isYTD;
+    const div=document.createElement('div');
+    div.style.cssText='display:flex;align-items:center;gap:6px;font-size:12px;color:#374151;font-weight:600';
+    div.innerHTML=`<span style="width:24px;height:3px;background:${color};border-radius:2px;display:inline-block${isYTD?';border-top:2px dashed '+color+';height:0':''}"></span>${y}${isYTD?' (YTD)':''}`;
+    legendDiv.appendChild(div);
+  });
+
+  /* chart */
+  destroyChart('mtMain');
+  CHARTS['mtMain']=new Chart($('mtMainChart'),{
+    type:mtChartType,
+    data:{labels:MT_MONTHS_LABELS, datasets},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index', intersect:false},
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{
+          label:ctx=>' '+ctx.dataset.label+': '+(ctx.raw!=null?fmtFull(ctx.raw):'no data')
+        }}
+      },
+      scales:{
+        x:{ticks:{color:'#94a3b8',font:{size:11}},grid:{color:'#f1f5f9'}},
+        y:{ticks:{color:'#94a3b8',font:{size:10},callback:v=>fmt(v)},grid:{color:'#f1f5f9'}}
+      }
+    }
+  });
+
+  /* KPI cards per year */
+  const kpisDiv=$('mtYearKpis'); kpisDiv.innerHTML='';
+  activeYearsSorted.forEach((y,i)=>{
+    const colorIdx=data.allYears.indexOf(y);
+    const color=MT_COLORS[colorIdx%MT_COLORS.length];
+    const total=Math.round(branches.reduce((s,b)=>s+Object.entries(b.monthly).filter(([m])=>m.startsWith(y)).reduce((a,[,v])=>a+v,0),0));
+    const months=branches.flatMap(b=>Object.entries(b.monthly).filter(([m])=>m.startsWith(y)).map(([,v])=>v)).filter(v=>v>0);
+    const best=months.length?Math.max(...months):0;
+    const worst=months.length?Math.min(...months):0;
+    const prevTotal=Math.round(branches.reduce((s,b)=>s+Object.entries(b.monthly).filter(([m])=>m.startsWith(String(parseInt(y)-1))).reduce((a,[,v])=>a+v,0),0));
+    const growth=prevTotal>0?pct(total,prevTotal):null;
+    const div=document.createElement('div');
+    div.style.cssText=`background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px;position:relative;overflow:hidden;box-shadow:0 1px 3px rgba(15,23,42,.04)`;
+    div.innerHTML=`
+      <div style="position:absolute;top:0;left:0;width:3px;height:100%;background:${color};border-radius:2px 0 0 2px"></div>
+      <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:5px">${y}${y===data.ytdYear&&data.isYTD?' YTD':''}</div>
+      <div style="font-size:20px;font-weight:700;color:#0f172a;line-height:1">${fmt(total)}</div>
+      <div style="font-size:11px;margin-top:5px">
+        ${growth!=null?`<span class="badge ${growth>=0?'up':'dn'}">${fmtPct(growth)}</span> vs ${parseInt(y)-1}`:'first year'}
+      </div>
+    `;
+    kpisDiv.appendChild(div);
+  });
+
+  /* monthly breakdown table */
+  const thead=$('mtTableHead'); const tbody=$('mtTableBody');
+  thead.innerHTML=`<tr><th>Month</th>${activeYearsSorted.map(y=>{
+    const colorIdx=data.allYears.indexOf(y);
+    return `<th style="text-align:right;color:${MT_COLORS[colorIdx%MT_COLORS.length]}">${y}</th><th style="text-align:right;color:#94a3b8;font-size:10px">MoM%</th>`;
+  }).join('')}</tr>`;
+  tbody.innerHTML='';
+  const prevMonthVals={};
+  MT_MONTHS_LABELS.forEach((mo,mi)=>{
+    const tr=document.createElement('tr');
+    let cells=`<td style="font-weight:600;color:#374151">${mo}</td>`;
+    activeYearsSorted.forEach(y=>{
+      const colorIdx=data.allYears.indexOf(y);
+      const color=MT_COLORS[colorIdx%MT_COLORS.length];
+      const monthKey=y+'-'+String(mi+1).padStart(2,'0');
+      const v=Math.round(branches.reduce((s,b)=>s+(b.monthly[monthKey]||0),0));
+      const prev=prevMonthVals[y]||0;
+      const g=prev>0?pct(v,prev):null;
+      prevMonthVals[y]=v;
+      cells+=`<td style="text-align:right;font-weight:500;color:${v>0?'#0f172a':'#cbd5e1'}">${v>0?fmtFull(v):'—'}</td>`;
+      cells+=`<td style="text-align:right">${g!=null?`<span class="badge ${g>=0?'up':'dn'}" style="font-size:10px">${fmtPct(g)}</span>`:'—'}</td>`;
+    });
+    tr.innerHTML=cells;
+    tbody.appendChild(tr);
   });
 }
 
