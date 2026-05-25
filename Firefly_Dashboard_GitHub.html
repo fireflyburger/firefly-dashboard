@@ -120,6 +120,40 @@ tr:hover td{background:#f8fafc}
 .alert-pct.warn{color:#d97706}
 .empty-state{text-align:center;padding:24px;color:#94a3b8;font-size:13px}
 
+/* ── ALERTS NOTIFICATION MODAL ── */
+.notif-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(2px)}
+.notif-box{background:#ffffff;border-radius:16px;width:100%;max-width:560px;box-shadow:0 16px 48px rgba(15,23,42,.16);overflow:hidden;animation:slideIn .3s ease}
+@keyframes slideIn{from{transform:translateY(-20px);opacity:0}to{transform:translateY(0);opacity:1}}
+.notif-header{background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);padding:20px 24px;display:flex;align-items:center;justify-content:space-between}
+.notif-header-left{display:flex;align-items:center;gap:12px}
+.notif-header-icon{width:40px;height:40px;background:#ff6b2b;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.notif-header-title{font-size:16px;font-weight:700;color:#fff}
+.notif-header-sub{font-size:11px;color:#94a3b8;margin-top:2px}
+.notif-close-btn{background:rgba(255,255,255,.1);border:none;color:#94a3b8;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer}
+.notif-close-btn:hover{background:rgba(255,255,255,.2);color:#fff}
+.notif-body{padding:16px 20px;max-height:65vh;overflow-y:auto}
+.notif-section{margin-bottom:16px}
+.notif-section-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.notif-item{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;margin-bottom:6px;cursor:pointer;transition:background .15s}
+.notif-item:hover{filter:brightness(.97)}
+.notif-item.danger{background:#fff5f5;border-left:3px solid #f87171}
+.notif-item.warning{background:#fffbeb;border-left:3px solid #fbbf24}
+.notif-item.success{background:#f0fdf4;border-left:3px solid #4ade80}
+.notif-item.info{background:#f0f9ff;border-left:3px solid #38bdf8}
+.notif-item.neutral{background:#f8fafc;border-left:3px solid #cbd5e1}
+.notif-icon{font-size:16px;flex-shrink:0;margin-top:1px}
+.notif-text{flex:1;min-width:0}
+.notif-title{font-size:13px;font-weight:600;color:#0f172a;line-height:1.3}
+.notif-detail{font-size:11px;color:#64748b;margin-top:2px;line-height:1.4}
+.notif-badge{flex-shrink:0;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;align-self:center}
+.notif-footer{padding:14px 20px;border-top:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;background:#fafafa}
+.notif-footer-meta{font-size:11px;color:#94a3b8}
+.notif-dismiss-btn{background:#ff6b2b;color:#fff;border:none;border-radius:8px;padding:8px 20px;font-size:13px;font-weight:600;cursor:pointer}
+.notif-dismiss-btn:hover{background:#e85d04}
+.notif-bell{position:fixed;bottom:24px;right:24px;width:48px;height:48px;background:#ff6b2b;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;box-shadow:0 4px 12px rgba(255,107,43,.4);z-index:300;border:none;transition:transform .15s}
+.notif-bell:hover{transform:scale(1.1)}
+.notif-bell-badge{position:absolute;top:-4px;right:-4px;background:#dc2626;color:#fff;border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff}
+
 /* ── MISC ── */
 .legend-row{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:10px}
 .legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:#64748b}
@@ -613,6 +647,33 @@ tr:hover td{background:#f8fafc}
   </div>
 </div>
 
+<!-- ══ NOTIFICATION MODAL ══ -->
+<div class="notif-overlay" id="notifOverlay" style="display:none">
+  <div class="notif-box">
+    <div class="notif-header">
+      <div class="notif-header-left">
+        <div class="notif-header-icon">🔔</div>
+        <div>
+          <div class="notif-header-title">Smart Alerts — Firefly Burger</div>
+          <div class="notif-header-sub" id="notifSubtitle">Loading alerts...</div>
+        </div>
+      </div>
+      <button class="notif-close-btn" onclick="closeNotif()">✕ Dismiss</button>
+    </div>
+    <div class="notif-body" id="notifBody"></div>
+    <div class="notif-footer">
+      <div class="notif-footer-meta" id="notifFooterMeta"></div>
+      <button class="notif-dismiss-btn" onclick="closeNotif()">Got it →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bell button (always visible) -->
+<button class="notif-bell" id="notifBell" onclick="openNotif()" title="View alerts" style="display:none">
+  🔔
+  <span class="notif-bell-badge" id="notifBellCount">0</span>
+</button>
+
 <script>
 const $=id=>document.getElementById(id);
 let CHARTS={};
@@ -825,6 +886,7 @@ function initDashboard(data){
   populateSelects(data);
   initMonthlyTrend(data);
   initIntelligence(data);
+  setTimeout(()=>buildAndShowAlerts(data), 800);
   renderOverview(data,'all');
   renderPerformance();
   renderTrends();
@@ -2137,6 +2199,232 @@ if(sessionStorage.getItem('ff_auth')==='1'){
 } else {
   setTimeout(()=>$('loginUser').focus(),300);
 }
+
+/* ══════════════════════════════════════════════════
+   SMART ALERTS SYSTEM
+══════════════════════════════════════════════════ */
+function buildAndShowAlerts(data){
+  const alerts=generateAlerts(data);
+  if(!alerts.length) return;
+
+  /* show bell */
+  const bell=$('notifBell');
+  bell.style.display='flex';
+  const urgent=alerts.filter(a=>a.type==='danger'||a.type==='warning').length;
+  $('notifBellCount').textContent=alerts.length;
+  $('notifBellCount').style.background=urgent>0?'#dc2626':'#64748b';
+
+  /* build modal body */
+  renderNotifBody(alerts,data);
+
+  /* auto-show on first load of session */
+  const shownKey='ff_alerts_shown_'+data.allMonths[data.allMonths.length-1];
+  if(!sessionStorage.getItem(shownKey)){
+    sessionStorage.setItem(shownKey,'1');
+    $('notifOverlay').style.display='flex';
+  }
+}
+
+function generateAlerts(data){
+  const alerts=[];
+  const lcy=data.lastCompleteYear;
+  const pcy=data.prevCompleteYear;
+  const ytd=data.ytdYear;
+  const ytdMo=data.ytdMonths;
+  const lastMonth=data.allMonths[data.allMonths.length-1];
+
+  /* ── 1. SHARP DECLINERS (YoY > -20%) ── */
+  data.branches.forEach(b=>{
+    const s1=sumYear([b],lcy), s2=sumYear([b],pcy);
+    if(s1>0&&s2>0){
+      const g=pct(s1,s2);
+      if(g<=-20){
+        alerts.push({
+          type:'danger',icon:'🚨',
+          title:`${b.city} — Sharp decline`,
+          detail:`${lcy}: ${fmt(s1)} vs ${pcy}: ${fmt(s2)}`,
+          badge:fmtPct(g),badgeClass:'dn',
+          action:()=>openBranchModal(b.city,null)
+        });
+      } else if(g<=-10){
+        alerts.push({
+          type:'warning',icon:'⚠️',
+          title:`${b.city} — Declining`,
+          detail:`${lcy}: ${fmt(s1)} vs ${pcy}: ${fmt(s2)} · ${b.country}`,
+          badge:fmtPct(g),badgeClass:'dn',
+          action:()=>openBranchModal(b.city,null)
+        });
+      }
+    }
+  });
+
+  /* ── 2. TOP PERFORMER THIS YEAR ── */
+  const topBranch=data.branches
+    .map(b=>({b,s:sumYear([b],lcy),p:sumYear([b],pcy)}))
+    .filter(x=>x.s>0&&x.p>0)
+    .sort((a,b2)=>pct(b2.s,b2.p)-pct(a.s,a.p))[0];
+  if(topBranch){
+    const g=pct(topBranch.s,topBranch.p);
+    if(g>20){
+      alerts.push({
+        type:'success',icon:'🚀',
+        title:`${topBranch.b.city} — Best growth this year`,
+        detail:`${lcy}: ${fmt(topBranch.s)} vs ${pcy}: ${fmt(topBranch.p)} · ${topBranch.b.country}`,
+        badge:fmtPct(g),badgeClass:'up',
+        action:()=>openBranchModal(topBranch.b.city,null)
+      });
+    }
+  }
+
+  /* ── 3. ALL-TIME RECORD MONTHS ── */
+  data.branches.forEach(b=>{
+    const allVals=Object.entries(b.monthly);
+    if(!allVals.length) return;
+    const peak=allVals.sort((a,c2)=>c2[1]-a[1])[0];
+    if(peak[0].startsWith(lcy)||peak[0].startsWith(ytd)){
+      alerts.push({
+        type:'success',icon:'🏆',
+        title:`${b.city} — All-time peak month`,
+        detail:`${peak[0]}: ${fmt(peak[1])} · ${b.country}`,
+        badge:'Record',badgeClass:'up',
+        action:()=>openBranchModal(b.city,null)
+      });
+    }
+  });
+
+  /* ── 4. INACTIVE BRANCHES (no data > 6 months) ── */
+  const sixMonthsAgo=data.allMonths[Math.max(0,data.allMonths.length-7)];
+  const inactive=data.branches.filter(b=>{
+    const lastM=Object.keys(b.monthly).sort().slice(-1)[0]||'';
+    return lastM>='2020-01'&&lastM<sixMonthsAgo&&lastM>='2023-01';
+  });
+  if(inactive.length){
+    alerts.push({
+      type:'neutral',icon:'📭',
+      title:`${inactive.length} branch${inactive.length>1?'es':''} — No recent data`,
+      detail:inactive.slice(0,4).map(b=>b.city).join(', ')+(inactive.length>4?` +${inactive.length-4} more`:''),
+      badge:inactive.length+'',badgeClass:'neu',
+      action:null
+    });
+  }
+
+  /* ── 5. YTD GROWTH vs same period last year ── */
+  if(data.isYTD){
+    const ytdTotal=sumYear(data.branches,ytd);
+    const priorBase=sumYearN(data.branches,lcy,ytdMo);
+    const g=priorBase>0?pct(ytdTotal,priorBase):null;
+    if(g!=null){
+      const mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][ytdMo-1];
+      alerts.push({
+        type:g>=0?'info':'warning',icon:g>=0?'📅':'📉',
+        title:`${ytd} YTD (Jan–${mo}) vs same period ${lcy}`,
+        detail:`${ytd}: ${fmt(ytdTotal)} vs ${lcy}: ${fmt(priorBase)}`,
+        badge:fmtPct(g),badgeClass:g>=0?'up':'dn',
+        action:null
+      });
+    }
+  }
+
+  /* ── 6. NEW BRANCHES this year ── */
+  const newBranches=data.branches.filter(b=>{
+    const firstM=Object.keys(b.monthly).sort()[0]||'';
+    return firstM.startsWith(ytd)||firstM.startsWith(lcy);
+  });
+  if(newBranches.length){
+    alerts.push({
+      type:'info',icon:'🆕',
+      title:`${newBranches.length} new branch${newBranches.length>1?'es':''} opened recently`,
+      detail:newBranches.map(b=>b.city+' ('+b.country+')').slice(0,4).join(', '),
+      badge:'New',badgeClass:'neu',
+      action:null
+    });
+  }
+
+  /* ── 7. OVERALL NETWORK HEALTH ── */
+  const totalLCY=sumYear(data.branches,lcy);
+  const totalPCY=sumYear(data.branches,pcy);
+  const netG=pct(totalLCY,totalPCY);
+  if(netG!=null){
+    alerts.unshift({
+      type:netG>=5?'success':netG>=-5?'info':'warning',
+      icon:netG>=5?'💚':'💛',
+      title:`Network ${netG>=0?'growth':'decline'} — ${lcy} vs ${pcy}`,
+      detail:`Total: ${fmt(totalLCY)} vs ${fmt(totalPCY)} across ${data.branches.filter(b=>sumYear([b],lcy)>0).length} active branches`,
+      badge:fmtPct(netG),badgeClass:netG>=0?'up':'dn',
+      action:null,
+      pinned:true
+    });
+  }
+
+  /* limit + sort: danger first */
+  const order={danger:0,warning:1,success:2,info:3,neutral:4};
+  return alerts.sort((a,b)=>{
+    if(a.pinned) return -1;
+    if(b.pinned) return 1;
+    return (order[a.type]||9)-(order[b.type]||9);
+  }).slice(0,12);
+}
+
+function renderNotifBody(alerts,data){
+  const lcy=data.lastCompleteYear;
+  const lastMonth=data.allMonths[data.allMonths.length-1];
+  const total=alerts.length;
+  const danger=alerts.filter(a=>a.type==='danger').length;
+  const warn=alerts.filter(a=>a.type==='warning').length;
+
+  $('notifSubtitle').textContent=`${total} alert${total>1?'s':''} · Last data: ${lastMonth}`;
+  $('notifFooterMeta').textContent=`${danger} critical · ${warn} warnings · Generated ${new Date().toLocaleDateString('en')}`;
+
+  const sections=[
+    {label:'🚨 Critical — immediate action',types:['danger']},
+    {label:'⚠️ Warnings — monitor closely',types:['warning']},
+    {label:'🚀 Highlights — top performance',types:['success']},
+    {label:'ℹ️ Insights',types:['info','neutral']},
+  ];
+
+  const body=$('notifBody');
+  body.innerHTML='';
+
+  sections.forEach(sec=>{
+    const items=alerts.filter(a=>sec.types.includes(a.type));
+    if(!items.length) return;
+    const section=document.createElement('div');
+    section.className='notif-section';
+    section.innerHTML=`<div class="notif-section-title">${sec.label} <span style="background:#e2e8f0;color:#64748b;border-radius:4px;padding:1px 6px;font-size:10px">${items.length}</span></div>`;
+    items.forEach(alert=>{
+      const item=document.createElement('div');
+      item.className=`notif-item ${alert.type}`;
+      if(alert.action) item.onclick=()=>{closeNotif();setTimeout(()=>alert.action(),200);};
+      item.innerHTML=`
+        <div class="notif-icon">${alert.icon}</div>
+        <div class="notif-text">
+          <div class="notif-title">${alert.title}</div>
+          <div class="notif-detail">${alert.detail}</div>
+        </div>
+        <span class="notif-badge badge ${alert.badgeClass}" style="font-size:11px">${alert.badge}</span>
+        ${alert.action?'<span style="color:#cbd5e1;font-size:11px;align-self:center">→</span>':''}
+      `;
+      section.appendChild(item);
+    });
+    body.appendChild(section);
+  });
+}
+
+function openNotif(){
+  if(!DATA) return;
+  const alerts=generateAlerts(DATA);
+  renderNotifBody(alerts,DATA);
+  $('notifOverlay').style.display='flex';
+}
+
+function closeNotif(){
+  $('notifOverlay').style.display='none';
+}
+
+/* close on overlay click */
+$('notifOverlay').addEventListener('click',e=>{
+  if(e.target===$('notifOverlay')) closeNotif();
+});
 </script>
 </body>
 </html>
