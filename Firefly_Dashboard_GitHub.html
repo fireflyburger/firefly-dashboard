@@ -230,6 +230,7 @@ tr:hover td{background:#f8fafc}
     <button class="nav-tab" onclick="switchTab('performance',this)">Branch Performance</button>
     <button class="nav-tab" onclick="switchTab('trends',this)">Trends</button>
     <button class="nav-tab" onclick="switchTab('monthly-trend',this)">📈 Monthly Trend</button>
+    <button class="nav-tab" onclick="switchTab('intelligence',this)">🧠 Intelligence</button>
     <button class="nav-tab" onclick="switchTab('summary',this)">Summary Table</button>
     <button class="nav-tab" onclick="switchTab('branches',this)">All Branches</button>
   </div>
@@ -476,6 +477,90 @@ tr:hover td{background:#f8fafc}
         <thead id="mtTableHead"></thead>
         <tbody id="mtTableBody"></tbody>
       </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══ TAB: INTELLIGENCE ══ -->
+<div class="tab-panel" id="tab-intelligence" style="padding:0 24px 40px">
+
+  <!-- Filter bar -->
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px 18px;margin-bottom:14px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;box-shadow:0 1px 3px rgba(15,23,42,.04)">
+    <div>
+      <label style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:4px">View</label>
+      <select id="intelView" onchange="renderIntelligence()" style="background:#f8fafc;border:1px solid #e2e8f0;color:#374151;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">
+        <option value="branch">By Branch</option>
+        <option value="country">By Country</option>
+      </select>
+    </div>
+    <div>
+      <label style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:4px">Country</label>
+      <select id="intelCountry" onchange="renderIntelligence()" style="background:#f8fafc;border:1px solid #e2e8f0;color:#374151;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">
+        <option value="all">All countries</option>
+      </select>
+    </div>
+    <div>
+      <label style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:4px">Compare years</label>
+      <select id="intelYear1" onchange="renderIntelligence()" style="background:#f8fafc;border:1px solid #e2e8f0;color:#374151;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer"></select>
+      <span style="margin:0 6px;color:#94a3b8;font-size:12px">vs</span>
+      <select id="intelYear2" onchange="renderIntelligence()" style="background:#f8fafc;border:1px solid #e2e8f0;color:#374151;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer"></select>
+    </div>
+    <div>
+      <label style="font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:4px">Risk threshold</label>
+      <select id="intelRisk" onchange="renderIntelligence()" style="background:#f8fafc;border:1px solid #e2e8f0;color:#374151;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer">
+        <option value="10">≥ -10% danger</option>
+        <option value="5" selected>≥ -5% warning</option>
+        <option value="15">≥ -15% danger</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Alert summary row -->
+  <div id="intelAlerts" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px"></div>
+
+  <!-- Year-over-year performance table -->
+  <div class="card mb">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div class="card-title" style="margin-bottom:0" id="intelTableTitle">Year-over-year performance</div>
+      <div style="display:flex;gap:8px;font-size:11px">
+        <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:#dcfce7;display:inline-block"></span> Growth</span>
+        <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:#fef9c3;display:inline-block"></span> Stable</span>
+        <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:#fee2e2;display:inline-block"></span> Decline</span>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <table id="intelTable">
+        <thead id="intelTableHead"></thead>
+        <tbody id="intelTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Two charts side by side -->
+  <div class="row2e mb">
+    <div class="card">
+      <div class="card-title">YoY growth % — ranked</div>
+      <div class="chart-wrap" id="intelChartWrap1" style="height:320px">
+        <canvas id="intelBarChart" role="img" aria-label="YoY growth ranked">YoY growth</canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Sales trajectory — top 10 vs bottom 10</div>
+      <div class="chart-wrap" style="height:320px">
+        <canvas id="intelTrajChart" role="img" aria-label="Sales trajectory">Trajectory</canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Risk & opportunity list -->
+  <div class="row2e">
+    <div class="card">
+      <div class="card-title">🚨 Risk alerts — declining branches</div>
+      <div id="intelRiskList"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🚀 Growth stars — top performers</div>
+      <div id="intelStarList"></div>
     </div>
   </div>
 </div>
@@ -739,6 +824,7 @@ function initDashboard(data){
   buildOverviewFilters(data);
   populateSelects(data);
   initMonthlyTrend(data);
+  initIntelligence(data);
   renderOverview(data,'all');
   renderPerformance();
   renderTrends();
@@ -1245,6 +1331,272 @@ function renderAllBranches(){
     `;
     body.appendChild(tr);
   });
+}
+
+/* ══════ TAB: INTELLIGENCE ══════ */
+function initIntelligence(data){
+  /* country select */
+  const cs=$('intelCountry');
+  cs.innerHTML='<option value="all">All countries</option>';
+  data.countries.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;cs.appendChild(o);});
+  /* year selects — default: compare lastCompleteYear vs prevCompleteYear */
+  [$('intelYear1'),$('intelYear2')].forEach((sel,idx)=>{
+    sel.innerHTML='';
+    [...data.allYears].reverse().forEach(y=>{
+      const o=document.createElement('option');o.value=y;o.textContent=y;sel.appendChild(o);
+    });
+  });
+  $('intelYear1').value=data.lastCompleteYear;
+  $('intelYear2').value=data.prevCompleteYear;
+  renderIntelligence();
+}
+
+function renderIntelligence(){
+  if(!DATA) return;
+  const data=DATA;
+  const view=$('intelView').value;
+  const countryF=$('intelCountry').value;
+  const y1=$('intelYear1').value;   /* current year */
+  const y2=$('intelYear2').value;   /* comparison year */
+  const riskPct=-Math.abs(parseInt($('intelRisk').value));
+
+  let branches=data.branches;
+  if(countryF!=='all') branches=branches.filter(b=>b.country===countryF);
+
+  /* aggregate by branch or country */
+  let entities=[];
+  if(view==='branch'){
+    entities=branches.map(b=>{
+      const s1=Math.round(sumYear([b],y1));
+      const s2=Math.round(sumYear([b],y2));
+      const allYearSales=data.allYears.map(y=>({y,v:Math.round(sumYear([b],y))}));
+      return {name:b.city,country:b.country,s1,s2,allYearSales};
+    }).filter(e=>e.s1>0||e.s2>0);
+  } else {
+    const agg={};
+    branches.forEach(b=>{
+      if(!agg[b.country]) agg[b.country]={name:b.country,country:b.country,branches:[]};
+      agg[b.country].branches.push(b);
+    });
+    entities=Object.values(agg).map(c=>{
+      const s1=Math.round(c.branches.reduce((s,b)=>s+sumYear([b],y1),0));
+      const s2=Math.round(c.branches.reduce((s,b)=>s+sumYear([b],y2),0));
+      const allYearSales=data.allYears.map(y=>({y,v:Math.round(c.branches.reduce((s,b)=>s+sumYear([b],y),0))}));
+      return {name:c.name,country:c.name,s1,s2,allYearSales};
+    }).filter(e=>e.s1>0||e.s2>0);
+  }
+
+  entities.forEach(e=>{
+    e.growth=e.s2>0?pct(e.s1,e.s2):null;
+    /* trend: last 3 years */
+    const last3=e.allYearSales.filter(x=>x.v>0).slice(-3);
+    e.trend3=last3.length>=2?pct(last3[last3.length-1].v,last3[0].v):null;
+    /* CAGR */
+    const first=e.allYearSales.find(x=>x.v>0);
+    const last=e.allYearSales.filter(x=>x.v>0).slice(-1)[0];
+    if(first&&last&&first.y!==last.y){
+      const yrs=parseInt(last.y)-parseInt(first.y);
+      e.cagr=yrs>0?(Math.pow(last.v/first.v,1/yrs)-1)*100:null;
+    } else e.cagr=null;
+    /* status */
+    if(e.growth===null) e.status='no-data';
+    else if(e.growth>=15) e.status='star';
+    else if(e.growth>=5) e.status='growth';
+    else if(e.growth>=-5) e.status='stable';
+    else if(e.growth>=riskPct) e.status='warning';
+    else e.status='danger';
+  });
+
+  /* sort by growth desc */
+  entities.sort((a,b)=>(b.growth??-999)-(a.growth??-999));
+
+  /* ── ALERT SUMMARY ── */
+  const stars=entities.filter(e=>e.status==='star'||e.status==='growth').length;
+  const stable=entities.filter(e=>e.status==='stable').length;
+  const warn=entities.filter(e=>e.status==='warning').length;
+  const danger=entities.filter(e=>e.status==='danger').length;
+  const noData=entities.filter(e=>e.status==='no-data').length;
+  const totalSales1=entities.reduce((s,e)=>s+e.s1,0);
+  const totalSales2=entities.reduce((s,e)=>s+e.s2,0);
+  const overallGrowth=totalSales2>0?pct(totalSales1,totalSales2):null;
+
+  $('intelAlerts').innerHTML=`
+    <div style="background:#fff;border:1px solid #e2e8f0;border-left:3px solid #0f172a;border-radius:8px;padding:12px 14px;box-shadow:0 1px 3px rgba(15,23,42,.04)">
+      <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:4px">Overall ${y1} vs ${y2}</div>
+      <div style="font-size:20px;font-weight:700;color:#0f172a">${fmt(totalSales1)}</div>
+      <div style="font-size:11px;color:#64748b;margin-top:3px"><span class="badge ${overallGrowth>=0?'up':'dn'}">${fmtPct(overallGrowth)}</span> vs ${fmt(totalSales2)}</div>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-left:3px solid #15803d;border-radius:8px;padding:12px 14px;box-shadow:0 1px 3px rgba(15,23,42,.04)">
+      <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:4px">🚀 Growing</div>
+      <div style="font-size:28px;font-weight:700;color:#15803d">${stars}</div>
+      <div style="font-size:11px;color:#64748b;margin-top:3px">${view==='branch'?'branches':'countries'} with +5% or more</div>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-left:3px solid #64748b;border-radius:8px;padding:12px 14px;box-shadow:0 1px 3px rgba(15,23,42,.04)">
+      <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:4px">➡️ Stable</div>
+      <div style="font-size:28px;font-weight:700;color:#374151">${stable}</div>
+      <div style="font-size:11px;color:#64748b;margin-top:3px">within ±5% range</div>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-left:3px solid #d97706;border-radius:8px;padding:12px 14px;box-shadow:0 1px 3px rgba(15,23,42,.04)">
+      <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:4px">⚠️ Warning</div>
+      <div style="font-size:28px;font-weight:700;color:#d97706">${warn}</div>
+      <div style="font-size:11px;color:#64748b;margin-top:3px">declining moderately</div>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-left:3px solid #dc2626;border-radius:8px;padding:12px 14px;box-shadow:0 1px 3px rgba(15,23,42,.04)">
+      <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:4px">🚨 Danger</div>
+      <div style="font-size:28px;font-weight:700;color:#dc2626">${danger}</div>
+      <div style="font-size:11px;color:#64748b;margin-top:3px">sharp decline — action needed</div>
+    </div>
+    ${noData?`<div style="background:#fff;border:1px solid #e2e8f0;border-left:3px solid #94a3b8;border-radius:8px;padding:12px 14px;box-shadow:0 1px 3px rgba(15,23,42,.04)">
+      <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:4px">📭 No data</div>
+      <div style="font-size:28px;font-weight:700;color:#94a3b8">${noData}</div>
+      <div style="font-size:11px;color:#64748b;margin-top:3px">no sales in ${y1}</div>
+    </div>`:''}
+  `;
+
+  /* ── YoY TABLE ── */
+  const statusStyle={
+    'star':   'background:#dcfce7;color:#15803d',
+    'growth': 'background:#dcfce7;color:#166534',
+    'stable': 'background:#fef9c3;color:#854d0e',
+    'warning':'background:#fff7ed;color:#c2410c',
+    'danger': 'background:#fee2e2;color:#dc2626',
+    'no-data':'background:#f8fafc;color:#94a3b8'
+  };
+  const statusIcon={'star':'🚀','growth':'✅','stable':'➡️','warning':'⚠️','danger':'🚨','no-data':'📭'};
+
+  $('intelTableTitle').textContent=`${view==='branch'?'Branch':'Country'} performance — ${y1} vs ${y2}`;
+  const allYrs=data.allYears;
+
+  $('intelTableHead').innerHTML=`<tr>
+    <th>${view==='branch'?'Branch':'Country'}</th>
+    ${view==='branch'?'<th>Country</th>':''}
+    ${allYrs.map(y=>`<th style="text-align:right;font-size:11px">${y}</th>`).join('')}
+    <th style="text-align:right">${y1} vs ${y2}</th>
+    <th style="text-align:right">3-Year Trend</th>
+    <th style="text-align:right">CAGR</th>
+    <th>Signal</th>
+  </tr>`;
+
+  $('intelTableBody').innerHTML='';
+  entities.forEach(e=>{
+    const yrCells=allYrs.map(yy=>{
+      const entry=e.allYearSales.find(x=>x.y===yy);
+      const v=entry?entry.v:0;
+      const isCurr=yy===y1; const isPrev=yy===y2;
+      return `<td style="text-align:right;font-size:12px;${isCurr?'font-weight:700;color:#0f172a':isPrev?'color:#64748b':'color:#94a3b8'}">${v>0?fmt(v):'—'}</td>`;
+    }).join('');
+    const countryCell=view==='branch'?`<td style="color:#64748b;font-size:12px">${e.country}</td>`:'';
+    const style=statusStyle[e.status];
+    const icon=statusIcon[e.status];
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td style="font-weight:600;color:#0f172a">
+        ${view==='branch'?`<span class="branch-link" onclick="openBranchModal('${e.name.replace(/'/g,"\\'")}',event)">${e.name}</span>`:e.name}
+      </td>
+      ${countryCell}
+      ${yrCells}
+      <td style="text-align:right"><span class="badge ${e.growth==null?'neu':e.growth>=0?'up':'dn'}" style="font-size:11px">${fmtPct(e.growth)}</span></td>
+      <td style="text-align:right"><span style="font-size:11px;font-weight:600;color:${(e.trend3??0)>=0?'#15803d':'#dc2626'}">${fmtPct(e.trend3)}</span></td>
+      <td style="text-align:right"><span style="font-size:11px;color:#64748b">${e.cagr!=null?fmtPct(e.cagr):'—'}</span></td>
+      <td><span style="font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;${style}">${icon} ${e.status.charAt(0).toUpperCase()+e.status.slice(1)}</span></td>
+    `;
+    $('intelTableBody').appendChild(tr);
+  });
+
+  /* ── BAR CHART — YoY growth ranked ── */
+  destroyChart('intelBar');
+  const barData=entities.filter(e=>e.growth!=null).slice(0,20);
+  const barColors=barData.map(e=>e.growth>=10?'#15803d88':e.growth>=0?'#16a34a55':e.growth>=-10?'#d9770688':'#dc262688');
+  const barBorders=barData.map(e=>e.growth>=10?'#15803d':e.growth>=0?'#16a34a':e.growth>=-10?'#d97706':'#dc2626');
+  const bh=Math.max(240,barData.length*24+60);
+  $('intelChartWrap1').style.height=bh+'px';
+  CHARTS['intelBar']=new Chart($('intelBarChart'),{
+    type:'bar',
+    data:{
+      labels:barData.map(e=>e.name),
+      datasets:[{label:'Growth %',data:barData.map(e=>parseFloat(e.growth.toFixed(1))),
+        backgroundColor:barColors,borderColor:barBorders,borderWidth:1,borderRadius:3}]
+    },
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmtPct(c.raw)}}},
+      scales:{
+        x:{ticks:{color:'#94a3b8',font:{size:10},callback:v=>v+'%'},grid:{color:'#f1f5f9'},
+          plugins:{annotation:{annotations:{zero:{type:'line',xMin:0,xMax:0,borderColor:'#94a3b8',borderWidth:1}}}}},
+        y:{ticks:{color:'#374151',font:{size:11}},grid:{display:false}}
+      }
+    }
+  });
+
+  /* ── TRAJECTORY CHART — top 5 + bottom 5 ── */
+  destroyChart('intelTraj');
+  const trajTop=entities.filter(e=>e.growth!=null).slice(0,5);
+  const trajBot=entities.filter(e=>e.growth!=null).slice(-5).reverse();
+  const trajEntities=[...new Map([...trajTop,...trajBot].map(e=>[e.name,e])).values()];
+  const trajColors=['#15803d','#16a34a','#22c55e','#4ade80','#86efac','#dc2626','#ef4444','#f87171','#fca5a5','#fecaca'];
+  const trajDatasets=trajEntities.map((e,i)=>({
+    label:e.name,
+    data:allYrs.map(y=>{const entry=e.allYearSales.find(x=>x.y===y);return entry&&entry.v>0?entry.v:null;}),
+    borderColor:trajColors[i%trajColors.length],
+    backgroundColor:'transparent',
+    tension:0.4,pointRadius:4,borderWidth:2,
+    spanGaps:false
+  }));
+  CHARTS['intelTraj']=new Chart($('intelTrajChart'),{
+    type:'line',
+    data:{labels:allYrs,datasets:trajDatasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom',labels:{font:{size:10},boxWidth:12,padding:8}}},
+      scales:{
+        x:{ticks:{color:'#94a3b8',font:{size:10}},grid:{color:'#f1f5f9'}},
+        y:{ticks:{color:'#94a3b8',font:{size:10},callback:v=>fmt(v)},grid:{color:'#f1f5f9'}}
+      }
+    }
+  });
+
+  /* ── RISK & STAR LISTS ── */
+  const riskList=entities.filter(e=>e.status==='danger'||e.status==='warning')
+    .sort((a,b)=>a.growth-b.growth);
+  const riskEl=$('intelRiskList');
+  riskEl.innerHTML='';
+  if(!riskList.length){
+    riskEl.innerHTML='<div class="empty-state">No risk alerts for this period 🎉</div>';
+  } else {
+    riskList.slice(0,8).forEach(e=>{
+      const urgent=e.status==='danger';
+      const div=document.createElement('div');
+      div.style.cssText=`display:flex;align-items:center;gap:10px;padding:10px 13px;background:${urgent?'#fff5f5':'#fffbeb'};border-radius:8px;margin-bottom:7px;border-left:3px solid ${urgent?'#f87171':'#fbbf24'}`;
+      div.innerHTML=`
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:#0f172a">${e.name}</div>
+          <div style="font-size:11px;color:#64748b;margin-top:1px">${view==='branch'?e.country:''} · ${y1}: ${fmt(e.s1)} vs ${y2}: ${fmt(e.s2)}</div>
+        </div>
+        <div style="font-size:14px;font-weight:700;color:${urgent?'#dc2626':'#d97706'};white-space:nowrap">${fmtPct(e.growth)}</div>
+      `;
+      riskEl.appendChild(div);
+    });
+  }
+
+  const starList=entities.filter(e=>e.status==='star'||e.status==='growth')
+    .sort((a,b)=>b.growth-a.growth);
+  const starEl=$('intelStarList');
+  starEl.innerHTML='';
+  if(!starList.length){
+    starEl.innerHTML='<div class="empty-state">No growth stars for this period</div>';
+  } else {
+    starList.slice(0,8).forEach(e=>{
+      const isStar=e.status==='star';
+      const div=document.createElement('div');
+      div.style.cssText=`display:flex;align-items:center;gap:10px;padding:10px 13px;background:${isStar?'#f0fdf4':'#f8fafc'};border-radius:8px;margin-bottom:7px;border-left:3px solid ${isStar?'#4ade80':'#86efac'}`;
+      div.innerHTML=`
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;color:#0f172a">${e.name}</div>
+          <div style="font-size:11px;color:#64748b;margin-top:1px">${view==='branch'?e.country:''} · ${y1}: ${fmt(e.s1)} vs ${y2}: ${fmt(e.s2)} · CAGR: ${fmtPct(e.cagr)}</div>
+        </div>
+        <div style="font-size:14px;font-weight:700;color:#15803d;white-space:nowrap">${fmtPct(e.growth)}</div>
+      `;
+      starEl.appendChild(div);
+    });
+  }
 }
 
 /* ══════ TAB: MONTHLY TREND ══════ */
