@@ -192,10 +192,14 @@ tr:hover td{background:#f8fafc}
 }
 
 /* ===== PRINT / PDF EXPORT ===== */
-.print-header{display:none;align-items:center;gap:14px;border-bottom:3px solid #ff6b2b;padding-bottom:12px;margin-bottom:16px}
-.print-header .ph-logo{width:42px;height:42px;background:#ff6b2b;color:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;flex-shrink:0}
+.print-header,.modal-print-header{display:none}
+.print-header .ph-logo,.modal-print-header .ph-logo{width:44px;height:44px;background:#ff6b2b;color:#fff;border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;flex-shrink:0;letter-spacing:.5px}
+.ph-brand{font-family:Arial,sans-serif;font-weight:800;font-size:19px;color:#0f172a;letter-spacing:.2px}
+.ph-brand span{color:#C8102E}
+.ph-tag{font-style:italic;color:#C9A84C;font-size:11px;letter-spacing:.5px}
+.ph-right{text-align:right;font-size:9.5px;color:#94a3b8;line-height:1.6;text-transform:uppercase;letter-spacing:.6px}
 @media print{
-  @page{margin:12mm}
+  @page{margin:11mm}
   html,body{background:#fff !important}
   *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
   .topbar,.nav-tabs,.filter-bar,#overviewFilters,.upload-zone,.notif-bell,.notif-overlay,.login-screen,.reload-btn,select,#yearFilter{display:none !important}
@@ -204,7 +208,7 @@ tr:hover td{background:#f8fafc}
   .dash-header{display:none !important}
   .tab-panel{display:none !important}
   .tab-panel.active{display:block !important}
-  .print-header{display:flex !important}
+  .print-header{display:flex !important;align-items:center;gap:14px;border-bottom:3px solid #C8102E;padding-bottom:12px;margin-bottom:18px}
   .card,.kpi,.kpi-card{break-inside:avoid;page-break-inside:avoid;box-shadow:none !important;border:1px solid #e2e8f0 !important}
   .row2,.row2e{display:block !important}
   .row2 .card,.row2e .card{margin-bottom:12px !important}
@@ -214,9 +218,10 @@ tr:hover td{background:#f8fafc}
   /* --- branch-detail modal export mode --- */
   body.print-modal .topbar,body.print-modal .nav-tabs,body.print-modal .dashboard,body.print-modal .notif-bell{display:none !important}
   body.print-modal .modal-overlay{display:block !important;position:static !important;background:none !important;padding:0 !important;overflow:visible !important}
-  body.print-modal .modal{box-shadow:none !important;max-width:100% !important;width:100% !important;margin:0 !important;max-height:none !important;border:1px solid #e2e8f0 !important}
-  body.print-modal .modal-close{display:none !important}
+  body.print-modal .modal{box-shadow:none !important;max-width:100% !important;width:100% !important;margin:0 !important;max-height:none !important;border:none !important;padding-top:0 !important}
+  body.print-modal .modal-close,body.print-modal .modal-header .modal-close{display:none !important}
   body.print-modal .modal *{max-height:none !important;overflow:visible !important}
+  body.print-modal .modal-print-header{display:flex !important;align-items:center;gap:14px;border-bottom:3px solid #C8102E;padding-bottom:12px;margin-bottom:16px}
 }
 </style>
 </head>
@@ -284,10 +289,11 @@ tr:hover td{background:#f8fafc}
   <div class="print-header" id="printHeader">
     <div class="ph-logo">FF</div>
     <div style="flex:1">
-      <div style="font-weight:800;font-size:18px;color:#0f172a">Firefly Burger &mdash; <span class="ph-title">Report</span></div>
-      <div class="ph-meta" style="font-size:12px;color:#475569;margin-top:2px"></div>
+      <div class="ph-brand"><span>FIREFLY</span> BURGER &mdash; <span style="color:#0f172a" class="ph-title">Report</span></div>
+      <div class="ph-tag">Above All Burgers</div>
+      <div class="ph-meta" style="font-size:11.5px;color:#475569;margin-top:3px"></div>
     </div>
-    <div style="font-size:10px;color:#94a3b8;text-align:right;line-height:1.5">CONFIDENTIAL<br>Above All Burgers</div>
+    <div class="ph-right">Confidential<br>Management Report</div>
   </div>
   <div class="dash-header">
     <div>
@@ -639,6 +645,15 @@ tr:hover td{background:#f8fafc}
 <!-- BRANCH DETAIL MODAL -->
 <div class="modal-overlay" id="branchModal" onclick="if(event.target===this)closeModal()">
   <div class="modal">
+    <div class="modal-print-header" id="modalPrintHeader">
+      <div class="ph-logo">FF</div>
+      <div style="flex:1">
+        <div class="ph-brand"><span>FIREFLY</span> BURGER &mdash; <span style="color:#0f172a">Branch Report</span></div>
+        <div class="ph-tag">Above All Burgers</div>
+        <div class="mph-name" style="font-size:12px;color:#475569;margin-top:3px"></div>
+      </div>
+      <div class="ph-right">Confidential<br>Branch Report</div>
+    </div>
     <div class="modal-header">
       <div>
         <div class="modal-title" id="modalTitle">—</div>
@@ -790,6 +805,11 @@ function loadFile(file){
 autoLoadFromGitHub();
 
 function printModal(){
+  try{
+    var mt=document.getElementById('modalTitle'), sub=document.getElementById('modalSub');
+    var nm=document.querySelector('#modalPrintHeader .mph-name');
+    if(nm){var s=(mt?mt.textContent.trim():'');if(sub)s+='  \u00b7  '+sub.textContent.trim();s+='  \u00b7  '+new Date().toLocaleDateString('en-GB');nm.textContent=s;}
+  }catch(e){}
   document.body.classList.add('print-modal');
   var done=function(){document.body.classList.remove('print-modal');window.removeEventListener('afterprint',done);};
   window.addEventListener('afterprint',done);
