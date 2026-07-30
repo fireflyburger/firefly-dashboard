@@ -190,6 +190,28 @@ tr:hover td{background:#f8fafc}
   .kpi-grid{grid-template-columns:repeat(2,1fr)}
   .modal-grid{grid-template-columns:1fr}
 }
+
+/* ===== PRINT / PDF EXPORT ===== */
+.print-header{display:none;align-items:center;gap:14px;border-bottom:3px solid #ff6b2b;padding-bottom:12px;margin-bottom:16px}
+.print-header .ph-logo{width:42px;height:42px;background:#ff6b2b;color:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;flex-shrink:0}
+@media print{
+  @page{margin:12mm}
+  html,body{background:#fff !important}
+  *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
+  .topbar,.nav-tabs,.filter-bar,#overviewFilters,.upload-zone,.notif-bell,.notif-overlay,.modal-overlay,.login-screen,.reload-btn,select,#yearFilter{display:none !important}
+  .app-shell{padding:0 !important}
+  .dashboard{display:block !important}
+  .dash-header{display:none !important}
+  .tab-panel{display:none !important}
+  .tab-panel.active{display:block !important}
+  .print-header{display:flex !important}
+  .card,.kpi,.kpi-card{break-inside:avoid;page-break-inside:avoid;box-shadow:none !important;border:1px solid #e2e8f0 !important}
+  .row2,.row2e{display:block !important}
+  .row2 .card,.row2e .card{margin-bottom:12px !important}
+  canvas{max-width:100% !important;height:auto !important}
+  table{font-size:10px !important}
+  a[href]:after{content:""}
+}
 </style>
 </head>
 <body>
@@ -230,6 +252,7 @@ tr:hover td{background:#f8fafc}
   </div>
   <div class="topbar-right">
     <span id="last-updated"></span>
+    <button class="reload-btn" onclick="printReport()" title="Print or save as PDF">&#128424; Print / PDF</button>
     <button class="reload-btn" onclick="reloadData()">&#8635; Reload Data</button>
     <button class="reload-btn" onclick="logout()" style="border-color:#f8514966;color:#f85149">&#10005; Sign out</button>
   </div>
@@ -252,6 +275,14 @@ tr:hover td{background:#f8fafc}
 </div>
 
 <div class="dashboard" id="dashboard">
+  <div class="print-header" id="printHeader">
+    <div class="ph-logo">FF</div>
+    <div style="flex:1">
+      <div style="font-weight:800;font-size:18px;color:#0f172a">Firefly Burger &mdash; <span class="ph-title">Report</span></div>
+      <div class="ph-meta" style="font-size:12px;color:#475569;margin-top:2px"></div>
+    </div>
+    <div style="font-size:10px;color:#94a3b8;text-align:right;line-height:1.5">CONFIDENTIAL<br>Above All Burgers</div>
+  </div>
   <div class="dash-header">
     <div>
       <div class="dash-title">Branch Performance Overview</div>
@@ -751,6 +782,24 @@ function loadFile(file){
 /* start auto-load when page opens */
 autoLoadFromGitHub();
 
+function printReport(){
+  try{
+    var tabBtn=document.querySelector('.nav-tab.active');
+    var tabName=tabBtn?tabBtn.textContent.trim():'Report';
+    var yb=document.querySelector('#yearFilter .filter-btn.active');
+    var yr=yb?yb.textContent.trim():'';
+    var ph=document.getElementById('printHeader');
+    if(ph){
+      var t=ph.querySelector('.ph-title'); if(t)t.textContent=tabName;
+      var m=ph.querySelector('.ph-meta');
+      var meta=(typeof DATA!=='undefined'&&DATA)?(DATA.branches.length+' branches \u00b7 '+DATA.countries.length+' countries'):'';
+      if(yr)meta+=(meta?'  \u00b7  ':'')+yr;
+      meta+=(meta?'  \u00b7  ':'')+new Date().toLocaleDateString('en-GB');
+      if(m)m.textContent=meta;
+    }
+  }catch(e){}
+  window.print();
+}
 function reloadData(){
   $('dashboard').style.display='none';
   $('uploadZone').style.display='block';
