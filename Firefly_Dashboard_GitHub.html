@@ -198,7 +198,7 @@ tr:hover td{background:#f8fafc}
   @page{margin:12mm}
   html,body{background:#fff !important}
   *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
-  .topbar,.nav-tabs,.filter-bar,#overviewFilters,.upload-zone,.notif-bell,.notif-overlay,.modal-overlay,.login-screen,.reload-btn,select,#yearFilter{display:none !important}
+  .topbar,.nav-tabs,.filter-bar,#overviewFilters,.upload-zone,.notif-bell,.notif-overlay,.login-screen,.reload-btn,select,#yearFilter{display:none !important}
   .app-shell{padding:0 !important}
   .dashboard{display:block !important}
   .dash-header{display:none !important}
@@ -211,6 +211,12 @@ tr:hover td{background:#f8fafc}
   canvas{max-width:100% !important;height:auto !important}
   table{font-size:10px !important}
   a[href]:after{content:""}
+  /* --- branch-detail modal export mode --- */
+  body.print-modal .topbar,body.print-modal .nav-tabs,body.print-modal .dashboard,body.print-modal .notif-bell{display:none !important}
+  body.print-modal .modal-overlay{display:block !important;position:static !important;background:none !important;padding:0 !important;overflow:visible !important}
+  body.print-modal .modal{box-shadow:none !important;max-width:100% !important;width:100% !important;margin:0 !important;max-height:none !important;border:1px solid #e2e8f0 !important}
+  body.print-modal .modal-close{display:none !important}
+  body.print-modal .modal *{max-height:none !important;overflow:visible !important}
 }
 </style>
 </head>
@@ -638,6 +644,7 @@ tr:hover td{background:#f8fafc}
         <div class="modal-title" id="modalTitle">—</div>
         <div class="modal-sub" id="modalSub">—</div>
       </div>
+      <button class="modal-close" onclick="printModal()" title="Print this branch report">&#128424; Print</button>
       <button class="modal-close" onclick="closeModal()">&#10005; Close</button>
     </div>
     <div class="modal-kpis" id="modalKpis"></div>
@@ -782,7 +789,16 @@ function loadFile(file){
 /* start auto-load when page opens */
 autoLoadFromGitHub();
 
+function printModal(){
+  document.body.classList.add('print-modal');
+  var done=function(){document.body.classList.remove('print-modal');window.removeEventListener('afterprint',done);};
+  window.addEventListener('afterprint',done);
+  window.print();
+  setTimeout(done,1500);
+}
 function printReport(){
+  var modal=document.getElementById('branchModal');
+  if(modal&&modal.classList.contains('open')){ printModal(); return; }
   try{
     var tabBtn=document.querySelector('.nav-tab.active');
     var tabName=tabBtn?tabBtn.textContent.trim():'Report';
