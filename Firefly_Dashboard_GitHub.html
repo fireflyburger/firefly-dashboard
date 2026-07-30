@@ -664,6 +664,7 @@ tr:hover td{background:#f8fafc}
       <button class="modal-close" onclick="closeModal()">&#10005; Close</button>
     </div>
     <div class="modal-kpis" id="modalKpis"></div>
+    <div id="modalEval"></div>
     <div class="modal-grid">
       <div class="modal-card">
         <div class="modal-card-title">Full sales history</div>
@@ -2066,6 +2067,66 @@ function openBranchModal(city,e){
     tbody.appendChild(tr);
   });
 
+  /* ===== Feature 2: Evaluation & Benchmarks ===== */
+  (function(){
+    try{
+      var netB=DATA.branches, cb=netB.filter(function(x){return x.country===b.country;});
+      function bt(x){var s=0;for(var k in x.monthly)s+=x.monthly[k];return s;}
+      function bmn(x){return Object.keys(x.monthly).length;}
+      function ba(x){var m=bmn(x);return m>0?bt(x)/m:0;}
+      var netAvg=netB.reduce(function(s,x){return s+ba(x);},0)/(netB.length||1);
+      var cAvg=cb.reduce(function(s,x){return s+ba(x);},0)/(cb.length||1);
+      var netTot=netB.reduce(function(s,x){return s+bt(x);},0);
+      var cTot=cb.reduce(function(s,x){return s+bt(x);},0);
+      var netRanked=netB.slice().sort(function(a,c){return bt(c)-bt(a);});
+      var cRanked=cb.slice().sort(function(a,c){return bt(c)-bt(a);});
+      var netRank=netRanked.findIndex(function(x){return x.city===b.city&&x.country===b.country;})+1;
+      var cRank=cRanked.findIndex(function(x){return x.city===b.city;})+1;
+      var vals=allM.map(function(m){return b.monthly[m]||0;});
+      var mom3=null;
+      if(vals.length>=6){var l3=vals.slice(-3).reduce(function(s,v){return s+v;},0);var p3=vals.slice(-6,-3).reduce(function(s,v){return s+v;},0);mom3=p3>0?((l3-p3)/p3*100):null;}
+      var vsC=cAvg>0?((avg-cAvg)/cAvg*100):null;
+      var vsN=netAvg>0?((avg-netAvg)/netAvg*100):null;
+      var shareC=cTot>0?(total/cTot*100):0, shareN=netTot>0?(total/netTot*100):0;
+      var latest=DATA.allMonths[DATA.allMonths.length-1];
+      var lastMoLocal=allM[allM.length-1];
+      var behind=DATA.allMonths.indexOf(latest)-DATA.allMonths.indexOf(lastMoLocal);
+      var inactive=behind>2;
+      var sig=[]; if(growth!=null)sig.push(growth); if(mom3!=null)sig.push(mom3);
+      var g=sig.length?sig.reduce(function(s,v){return s+v;},0)/sig.length:0;
+      var rating,rc,verdict;
+      if(inactive){rating='⚠️ At Risk / Inactive';rc='#dc2626';verdict='No recent sales for '+behind+' months — needs immediate attention.';}
+      else if(g>=15){rating='⭐ Star Performer';rc='#16a34a';verdict='Strong, consistent growth — among the healthiest branches.';}
+      else if(g>=5){rating='📈 Growing';rc='#16a34a';verdict='Positive momentum; performing above trend.';}
+      else if(g>=-5){rating='➖ Stable';rc='#d97706';verdict='Holding steady with limited change.';}
+      else if(g>=-15){rating='📉 Declining';rc='#ea580c';verdict='Sales are softening — monitor closely.';}
+      else {rating='🚨 At Risk';rc='#dc2626';verdict='Sharp decline — requires action.';}
+      function sp(v){return v==null?'—':(v>=0?'+':'')+v.toFixed(1)+'%';}
+      function pill(lbl,val,good){
+        var c=good==null?'#0f172a':(good?'#16a34a':'#dc2626');
+        return '<div style="flex:1;min-width:118px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:9px 11px">'
+          +'<div style="font-size:9.5px;color:#64748b;text-transform:uppercase;letter-spacing:.04em">'+lbl+'</div>'
+          +'<div style="font-size:15px;font-weight:700;color:'+c+';margin-top:2px">'+val+'</div></div>';
+      }
+      var el=document.getElementById('modalEval');
+      if(el){el.innerHTML=
+        '<div style="background:'+rc+'12;border:1px solid '+rc+'44;border-left:4px solid '+rc+';border-radius:10px;padding:12px 14px;margin-bottom:14px">'
+        +'<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">'
+        +'<span style="font-size:16px;font-weight:800;color:'+rc+'">'+rating+'</span>'
+        +'<span style="font-size:12px;color:#475569">'+verdict+'</span></div>'
+        +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:11px">'
+        +pill('Rank in '+b.country,'#'+cRank+' of '+cb.length,null)
+        +pill('Rank in network','#'+netRank+' of '+netB.length,null)
+        +pill('vs country avg',sp(vsC),vsC==null?null:vsC>=0)
+        +pill('vs network avg',sp(vsN),vsN==null?null:vsN>=0)
+        +pill('Momentum 3mo',sp(mom3),mom3==null?null:mom3>=0)
+        +pill('YoY growth',sp(growth),growth==null?null:growth>=0)
+        +pill('Share of '+b.country,shareC.toFixed(1)+'%',null)
+        +pill('Share of network',shareN.toFixed(2)+'%',null)
+        +'</div></div>';
+      }
+    }catch(e){ /* eval optional */ }
+  })();
   $('branchModal').classList.add('open');
 }
 
