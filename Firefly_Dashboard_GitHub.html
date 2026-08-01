@@ -953,7 +953,7 @@ function renderCohorts(){
       ds.push({label:rampSel,data:sd,borderColor:'#ff6b2b',backgroundColor:'transparent',fill:false,tension:.3,pointRadius:0,borderWidth:2.5});
       if(diagEl){var d=rampDiagnosis(sb);var c=d.faster?'#16a34a':'#dc2626';var bg=d.faster?'#dcfce7':'#fee2e2';var icon=d.faster?'\u26a1':'\u26a0\ufe0f';
         diagEl.style.display='block';diagEl.style.background=bg;diagEl.style.color=c;diagEl.style.border='1px solid '+c+'55';
-        diagEl.innerHTML=icon+' '+rampSel+' ramped '+(d.faster?'faster':'slower')+' than '+d.pctBeat+'% of the network over its first '+d.K+' months '
+        diagEl.innerHTML=icon+' '+rampSel+' outperformed '+d.pctBeat+'% of the network over its first '+d.K+' months '
           +'(avg '+fmt(d.bAvg)+' vs network '+fmt(d.netMean)+', '+(d.vs>=0?'+':'')+d.vs.toFixed(0)+'%). Rank #'+d.rank+' of '+d.n+' at this age.';}
     }
   } else if(diagEl){diagEl.style.display='none';}
