@@ -685,6 +685,7 @@ tr:hover td{background:#f8fafc}
         <canvas id="modalMomChart" role="img" aria-label="Branch MoM">Branch MoM</canvas>
       </div>
     </div>
+    <div class="modal-card" id="healthSection" style="margin-bottom:12px"></div>
     <div class="modal-card">
       <div class="modal-card-title">Monthly breakdown</div>
       <div style="overflow-x:auto;max-height:260px;overflow-y:auto">
@@ -1999,7 +2000,7 @@ function openBranchModal(city,e){
   `;
 
   /* destroy old modal charts */
-  ['mTrend','mYear','mMom'].forEach(k=>{if(modalCharts[k]){try{modalCharts[k].destroy();}catch(e){}delete modalCharts[k];}});
+  ['mTrend','mYear','mMom','hSeason','hYoY','hTTM'].forEach(k=>{if(modalCharts[k]){try{modalCharts[k].destroy();}catch(e){}delete modalCharts[k];}});
 
   /* trend chart — full history */
   const mt=allM.map(m=>({m,v:Math.round(b.monthly[m]||0)}));
@@ -2126,6 +2127,66 @@ function openBranchModal(city,e){
         +'</div></div>';
       }
     }catch(e){ /* eval optional */ }
+  })();
+  /* ===== Branch Health: Seasonality + YoY same-month + TTM ===== */
+  (function(){
+    try{
+      var MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      function fmtN(v){return (typeof fmt==='function')?fmt(v):(''+Math.round(v));}
+      function sp(v){return v==null?'—':(v>=0?'+':'')+v.toFixed(1)+'%';}
+      /* seasonality: avg per calendar month */
+      var sSum={},sCnt={};
+      allM.forEach(function(m){var mo=m.slice(5);var v=b.monthly[m]||0;sSum[mo]=(sSum[mo]||0)+v;sCnt[mo]=(sCnt[mo]||0)+1;});
+      var seasonAvg=[],peakIdx=0;
+      for(var mo=1;mo<=12;mo++){var k=(''+mo).length<2?('0'+mo):(''+mo);var a=sCnt[k]?sSum[k]/sCnt[k]:0;seasonAvg.push(a);if(a>seasonAvg[peakIdx])peakIdx=mo-1;}
+      var peakName=MN[peakIdx], peakVal=seasonAvg[peakIdx];
+      /* YoY same month */
+      var yoyL=[],yoyV=[];
+      allM.forEach(function(m){var y=+m.slice(0,4),mo=m.slice(5);var pk=(y-1)+'-'+mo;
+        if(b.monthly[pk]!=null&&b.monthly[pk]>0){yoyL.push(m);yoyV.push((b.monthly[m]-b.monthly[pk])/b.monthly[pk]*100);}});
+      var last12=yoyV.slice(-12); var avgYoY=last12.length?last12.reduce(function(s,v){return s+v;},0)/last12.length:null;
+      /* TTM: calendar 12-month trailing sum */
+      function addM(key,d){var y=+key.slice(0,4),mm=+key.slice(5);var idx=y*12+(mm-1)+d;var ny=Math.floor(idx/12),nm=idx%12+1;return ny+'-'+((''+nm).length<2?('0'+nm):(''+nm));}
+      var first=allM[0], ttmL=[],ttmV=[];
+      allM.forEach(function(m){var start=addM(m,-11); if(start>=first){var s=0;for(var d=0;d<12;d++){s+=b.monthly[addM(start,d)]||0;}ttmL.push(m);ttmV.push(s);}});
+      var ttmCur=ttmV.length?ttmV[ttmV.length-1]:null, ttmGrowth=null;
+      if(ttmV.length>=13){var A=ttmV[ttmV.length-1],C=ttmV[ttmV.length-13];ttmGrowth=C>0?(A-C)/C*100:null;}
+      /* render */
+      function pill(lbl,val,good){var c=good==null?'#0f172a':(good?'#16a34a':'#dc2626');
+        return '<div style="flex:1;min-width:118px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:9px 11px">'
+        +'<div style="font-size:9.5px;color:#64748b;text-transform:uppercase;letter-spacing:.04em">'+lbl+'</div>'
+        +'<div style="font-size:15px;font-weight:700;color:'+c+';margin-top:2px">'+val+'</div></div>';}
+      var hs=document.getElementById('healthSection');
+      if(!hs) return;
+      hs.innerHTML='<div class="modal-card-title">Branch Health — Seasonality · Year-over-Year · Trailing 12 Months</div>'
+        +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">'
+        +pill('Peak season',peakName+' ('+fmtN(peakVal)+')',null)
+        +pill('Avg YoY (12mo)',sp(avgYoY),avgYoY==null?null:avgYoY>=0)
+        +pill('TTM growth',sp(ttmGrowth),ttmGrowth==null?null:ttmGrowth>=0)
+        +pill('Current TTM',fmtN(ttmCur||0),null)
+        +'</div>'
+        +'<div class="modal-grid">'
+        +'<div><div style="font-size:11px;color:#64748b;margin-bottom:4px">Seasonality — avg by calendar month</div><div class="chart-wrap" style="height:150px"><canvas id="hSeason"></canvas></div></div>'
+        +'<div><div style="font-size:11px;color:#64748b;margin-bottom:4px">Year-over-year (same month %)</div><div class="chart-wrap" style="height:150px"><canvas id="hYoY"></canvas></div></div>'
+        +'</div>'
+        +'<div style="margin-top:10px"><div style="font-size:11px;color:#64748b;margin-bottom:4px">Trailing 12-month total (TTM)</div><div class="chart-wrap" style="height:150px"><canvas id="hTTM"></canvas></div></div>';
+      var yTick={color:'#94a3b8',font:{size:9},callback:function(v){return fmtN(v);}};
+      var pTick={color:'#94a3b8',font:{size:9},callback:function(v){return v+'%';}};
+      modalCharts['hSeason']=new Chart(document.getElementById('hSeason'),{type:'bar',
+        data:{labels:MN,datasets:[{data:seasonAvg.map(function(v){return Math.round(v);}),
+          backgroundColor:MN.map(function(_,i){return i===peakIdx?'#ff6b2b':'#378add88';}),borderRadius:3}]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return ' '+fmtFull(c.raw);}}}},
+          scales:{x:{ticks:{color:'#94a3b8',font:{size:9}},grid:{display:false}},y:{ticks:yTick,grid:{color:'#f1f5f9'}}}}});
+      modalCharts['hYoY']=new Chart(document.getElementById('hYoY'),{type:'bar',
+        data:{labels:yoyL,datasets:[{data:yoyV.map(function(v){return parseFloat(v.toFixed(1));}),
+          backgroundColor:yoyV.map(function(v){return v>=0?'#3fb95099':'#f8514999';}),borderRadius:2}]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return sp(c.raw);}}}},
+          scales:{x:{ticks:xTicksOpts(yoyL.length),grid:{display:false}},y:{ticks:pTick,grid:{color:'#f1f5f9'}}}}});
+      modalCharts['hTTM']=new Chart(document.getElementById('hTTM'),{type:'line',
+        data:{labels:ttmL,datasets:[{data:ttmV.map(function(v){return Math.round(v);}),borderColor:'#ff6b2b',backgroundColor:'#ff6b2b18',fill:true,tension:0.4,pointRadius:0,borderWidth:2}]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return ' '+fmtFull(c.raw);}}}},
+          scales:{x:{ticks:xTicksOpts(ttmL.length),grid:{color:'#f1f5f9'}},y:{ticks:yTick,grid:{color:'#f1f5f9'}}}}});
+    }catch(e){ /* health optional */ }
   })();
   $('branchModal').classList.add('open');
 }
