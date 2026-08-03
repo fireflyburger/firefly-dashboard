@@ -653,12 +653,25 @@ tr:hover td{background:#f8fafc}
     <select id="rampBranch" onchange="renderCohorts()" style="background:#21262d;border:1px solid #30363d;color:#e6edf3;border-radius:6px;padding:5px 10px;font-size:12px"></select>
     <label style="color:#7d8590;font-size:12px;margin-left:auto;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cohActiveOnly" onchange="renderCohorts()" style="accent-color:#ff6b2b"> Active only</label>
   </div>
-  <div class="kpi-grid" id="cohortCards" style="margin-bottom:18px"></div>
+  <div class="kpi-grid" id="cohortCards" style="margin-bottom:6px"></div>
+  <div style="font-size:11px;color:#7d8590;margin-bottom:16px">Each card shows branch count &amp; avg monthly sales for that age group. Dots = health mix: <span style="color:#16a34a">● active</span> &middot; <span style="color:#d97706">● slowing</span> &middot; <span style="color:#dc2626">● declining/inactive</span>.</div>
   <div class="card mb" style="margin-bottom:18px">
     <div class="card-title">Network ramp curve &mdash; average sales by months since opening</div>
     <div style="font-size:11px;color:#7d8590;margin-bottom:8px">Aligns every branch by its own age (month 1 = first month open). Shows the typical trajectory; overlay a branch to see its launch <b>and</b> current status.</div>
     <div id="rampDiag" style="display:none;margin-bottom:10px;padding:10px 13px;border-radius:8px;font-size:12.5px;line-height:1.5"></div>
     <div class="chart-wrap" style="height:260px"><canvas id="rampChart"></canvas></div>
+  </div>
+  <div class="card mb" style="margin-bottom:18px">
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span>Generation launch comparison &mdash; avg ramp by opening year</span>
+      <select id="genWindow" onchange="renderCohorts()" style="background:#21262d;border:1px solid #30363d;color:#e6edf3;border-radius:6px;padding:4px 8px;font-size:12px">
+        <option value="12">First 12 months</option>
+        <option value="18" selected>First 18 months</option>
+        <option value="24">First 24 months</option>
+      </select>
+    </div>
+    <div style="font-size:11px;color:#7d8590;margin-bottom:8px">Each line = branches that opened in a given year, averaged by months since opening. If newer years sit higher, your launches are getting stronger.</div>
+    <div class="chart-wrap" style="height:260px"><canvas id="genChart"></canvas></div>
   </div>
   <div class="card">
     <div class="card-title">Peer comparison &mdash; branches grouped by operating months</div>
@@ -930,6 +943,7 @@ function renderCohorts(){
   var band=(document.getElementById('cohortBand')||{}).value||'all';
   if(band!==_cohLastBand){ populateRampOptions(band); var rbx=document.getElementById('rampBranch'); if(rbx)rbx.value='none'; _cohLastBand=band; }
   var rampSel=(document.getElementById('rampBranch')||{}).value||'none';
+  renderGenerations();
   var cardsEl=document.getElementById('cohortCards');
   if(cardsEl){var html='';COHORT_ORDER.forEach(function(bd){
     var inb=br.filter(function(b){return cohortBandOf(cohortTenure(b))===bd;});if(!inb.length)return;
@@ -937,7 +951,7 @@ function renderCohorts(){
     var sc={active:0,slowing:0,declining:0,inactive:0};
     inb.forEach(function(b){var c=branchStatus(b).code;if(sc[c]!=null)sc[c]++;});
     var accent=(band===bd)?'#ff6b2b':'#378add';
-    var chips='<span style="color:#16a34a">●'+sc.active+'</span> <span style="color:#d97706">●'+sc.slowing+'</span> <span style="color:#dc2626">●'+(sc.declining+sc.inactive)+'</span>';
+    var chips='<span style="color:#16a34a" title="Active">● '+sc.active+' active</span> &nbsp;<span style="color:#d97706" title="Slowing">● '+sc.slowing+' slow</span> &nbsp;<span style="color:#dc2626" title="Declining or inactive">● '+(sc.declining+sc.inactive)+' risk</span>';
     html+='<div class="kpi" style="--accent:'+accent+'"><div class="kpi-label">'+bd+'</div><div class="kpi-value" style="font-size:22px">'+inb.length+'</div><div class="kpi-sub">avg '+fmt(avgM)+'/mo</div><div class="kpi-sub" style="margin-top:3px;font-size:11px">'+chips+'</div></div>';
   });cardsEl.innerHTML=html;}
   var bandAvg={};COHORT_ORDER.forEach(function(bd){var inb=br.filter(function(b){return cohortBandOf(cohortTenure(b))===bd;});bandAvg[bd]=inb.length?inb.reduce(function(s,b){return s+cohortAvg(b);},0)/inb.length:0;});
@@ -981,6 +995,24 @@ function renderCohorts(){
   CHARTS['ramp']=new Chart(document.getElementById('rampChart'),{type:'line',data:{labels:labels,datasets:ds},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:ds.length>1,position:'bottom',labels:{color:'#7d8590',font:{size:11},boxWidth:12}},tooltip:{callbacks:{label:function(c){return ' '+(c.dataset.label||'')+': '+fmtFull(c.raw);}}}},
       scales:{x:{ticks:xTicksOpts(labels.length),grid:{color:'#1f2630'}},y:{ticks:{color:'#94a3b8',font:{size:10},callback:function(v){return fmt(v);}},grid:{color:'#1f2630'}}}}});
+}
+function renderGenerations(){
+  if(!DATA||!document.getElementById('genChart')) return;
+  var win=parseInt((document.getElementById('genWindow')||{}).value||'18');
+  var byYear={};
+  DATA.branches.forEach(function(b){var ks=Object.keys(b.monthly).sort();if(!ks.length)return;var yr=ks[0].slice(0,4);(byYear[yr]=byYear[yr]||[]).push(cohortSeries(b));});
+  var years=Object.keys(byYear).sort();
+  var labels=[];for(var k=1;k<=win;k++)labels.push('M'+k);
+  var palette=['#94a3b8','#60a5fa','#34d399','#fbbf24','#fb923c','#f87171','#a78bfa','#f472b6'];
+  var ds=years.map(function(yr,idx){
+    var arrs=byYear[yr],line=[];
+    for(var k=0;k<win;k++){var vals=[];arrs.forEach(function(a){if(a.length>k)vals.push(a[k]);});line.push(vals.length?Math.round(vals.reduce(function(s,v){return s+v;},0)/vals.length):null);}
+    return {label:yr+' ('+arrs.length+')',data:line,borderColor:palette[idx%palette.length],backgroundColor:'transparent',fill:false,tension:.3,pointRadius:0,borderWidth:2};
+  });
+  if(CHARTS['gen']){try{CHARTS['gen'].destroy();}catch(e){}delete CHARTS['gen'];}
+  CHARTS['gen']=new Chart(document.getElementById('genChart'),{type:'line',data:{labels:labels,datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom',labels:{color:'#7d8590',font:{size:10},boxWidth:12}},tooltip:{callbacks:{label:function(c){return ' '+(c.dataset.label||'')+': '+fmtFull(c.raw);}}}},
+      scales:{x:{ticks:{color:'#94a3b8',font:{size:9}},grid:{color:'#1f2630'}},y:{ticks:{color:'#94a3b8',font:{size:10},callback:function(v){return fmt(v);}},grid:{color:'#1f2630'}}}}});
 }
 function reloadData(){
   $('dashboard').style.display='none';
