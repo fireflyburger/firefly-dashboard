@@ -671,6 +671,7 @@ tr:hover td{background:#f8fafc}
       </select>
     </div>
     <div style="font-size:11px;color:#7d8590;margin-bottom:8px">Each line = branches that opened in a given year, averaged by months since opening. If newer years sit higher, your launches are getting stronger.</div>
+    <div id="genInsight" style="display:none;margin-bottom:10px;padding:9px 12px;border-radius:8px;background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a5f;font-size:12.5px;line-height:1.5"></div>
     <div class="chart-wrap" style="height:260px"><canvas id="genChart"></canvas></div>
   </div>
   <div class="card">
@@ -1009,6 +1010,20 @@ function renderGenerations(){
     for(var k=0;k<win;k++){var vals=[];arrs.forEach(function(a){if(a.length>k)vals.push(a[k]);});line.push(vals.length?Math.round(vals.reduce(function(s,v){return s+v;},0)/vals.length):null);}
     return {label:yr+' ('+arrs.length+')',data:line,borderColor:palette[idx%palette.length],backgroundColor:'transparent',fill:false,tension:.3,pointRadius:0,borderWidth:2};
   });
+  var gi=document.getElementById('genInsight');
+  if(gi){
+    var ya={};years.forEach(function(yr){var arrs=byYear[yr],t=0,c=0;arrs.forEach(function(a){for(var k=0;k<win&&k<a.length;k++){t+=a[k];c++;}});ya[yr]=c?t/c:0;});
+    if(years.length>=2){
+      var best=years[0],worst=years[0];years.forEach(function(y){if(ya[y]>ya[best])best=y;if(ya[y]<ya[worst])worst=y;});
+      var first=years[0],last=years[years.length-1];
+      var delta=ya[first]>0?((ya[last]-ya[first])/ya[first]*100):0;
+      var trend=delta>=10?'improving \ud83d\udcc8':delta<=-10?'weakening \ud83d\udcc9':'holding steady';
+      gi.style.display='block';
+      gi.innerHTML='<b>How to read:</b> the horizontal axis is months since a branch opened (M1 = first month); each coloured line averages all branches that opened in that year (count in the legend). '
+        +'<b>Strongest launch generation:</b> '+best+' (~'+fmt(ya[best])+'/mo over the first '+win+' months). <b>Weakest:</b> '+worst+' (~'+fmt(ya[worst])+'/mo). '
+        +'Newest generation '+last+' opened at ~'+fmt(ya[last])+'/mo vs '+first+' at ~'+fmt(ya[first])+'/mo ('+(delta>=0?'+':'')+delta.toFixed(0)+'%) \u2014 launch quality is '+trend+'.';
+    } else {gi.style.display='none';}
+  }
   if(CHARTS['gen']){try{CHARTS['gen'].destroy();}catch(e){}delete CHARTS['gen'];}
   CHARTS['gen']=new Chart(document.getElementById('genChart'),{type:'line',data:{labels:labels,datasets:ds},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom',labels:{color:'#7d8590',font:{size:10},boxWidth:12}},tooltip:{callbacks:{label:function(c){return ' '+(c.dataset.label||'')+': '+fmtFull(c.raw);}}}},
