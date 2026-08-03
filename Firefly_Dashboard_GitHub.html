@@ -651,6 +651,7 @@ tr:hover td{background:#f8fafc}
     <select id="cohortBand" onchange="renderCohorts()" style="background:#21262d;border:1px solid #30363d;color:#e6edf3;border-radius:6px;padding:5px 10px;font-size:12px"></select>
     <label style="color:#7d8590;font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin-left:6px">Overlay branch on ramp</label>
     <select id="rampBranch" onchange="renderCohorts()" style="background:#21262d;border:1px solid #30363d;color:#e6edf3;border-radius:6px;padding:5px 10px;font-size:12px"></select>
+    <label style="color:#7d8590;font-size:12px;margin-left:auto;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cohActiveOnly" onchange="renderCohorts()" style="accent-color:#ff6b2b"> Active only</label>
   </div>
   <div class="kpi-grid" id="cohortCards" style="margin-bottom:18px"></div>
   <div class="card mb" style="margin-bottom:18px">
@@ -899,7 +900,8 @@ function branchStatus(b){
 }
 function populateRampOptions(band){
   var rb=document.getElementById('rampBranch'); if(!rb)return;
-  var list=DATA.branches.filter(function(b){return band==='all'||cohortBandOf(cohortTenure(b))===band;});
+  var actOnly=!!(document.getElementById('cohActiveOnly')||{}).checked;
+  var list=DATA.branches.filter(function(b){return (band==='all'||cohortBandOf(cohortTenure(b))===band) && (!actOnly||branchStatus(b).code!=='inactive');});
   list.sort(function(a,c){return a.city.localeCompare(c.city);});
   rb.innerHTML='<option value="none">None</option>'+list.map(function(b){return '<option value="'+b.city+'">'+b.city+' ('+b.country+')</option>';}).join('');
 }
@@ -923,15 +925,20 @@ function rampDiagnosis(sb){
 }
 function renderCohorts(){
   if(!DATA) return;
-  var br=DATA.branches, band=(document.getElementById('cohortBand')||{}).value||'all';
+  var activeOnly=!!(document.getElementById('cohActiveOnly')||{}).checked;
+  var br=DATA.branches.filter(function(b){return activeOnly?branchStatus(b).code!=='inactive':true;});
+  var band=(document.getElementById('cohortBand')||{}).value||'all';
   if(band!==_cohLastBand){ populateRampOptions(band); var rbx=document.getElementById('rampBranch'); if(rbx)rbx.value='none'; _cohLastBand=band; }
   var rampSel=(document.getElementById('rampBranch')||{}).value||'none';
   var cardsEl=document.getElementById('cohortCards');
   if(cardsEl){var html='';COHORT_ORDER.forEach(function(bd){
     var inb=br.filter(function(b){return cohortBandOf(cohortTenure(b))===bd;});if(!inb.length)return;
     var avgM=inb.reduce(function(s,b){return s+cohortAvg(b);},0)/inb.length;
+    var sc={active:0,slowing:0,declining:0,inactive:0};
+    inb.forEach(function(b){var c=branchStatus(b).code;if(sc[c]!=null)sc[c]++;});
     var accent=(band===bd)?'#ff6b2b':'#378add';
-    html+='<div class="kpi" style="--accent:'+accent+'"><div class="kpi-label">'+bd+'</div><div class="kpi-value" style="font-size:22px">'+inb.length+'</div><div class="kpi-sub">avg '+fmt(avgM)+'/mo</div></div>';
+    var chips='<span style="color:#16a34a">●'+sc.active+'</span> <span style="color:#d97706">●'+sc.slowing+'</span> <span style="color:#dc2626">●'+(sc.declining+sc.inactive)+'</span>';
+    html+='<div class="kpi" style="--accent:'+accent+'"><div class="kpi-label">'+bd+'</div><div class="kpi-value" style="font-size:22px">'+inb.length+'</div><div class="kpi-sub">avg '+fmt(avgM)+'/mo</div><div class="kpi-sub" style="margin-top:3px;font-size:11px">'+chips+'</div></div>';
   });cardsEl.innerHTML=html;}
   var bandAvg={};COHORT_ORDER.forEach(function(bd){var inb=br.filter(function(b){return cohortBandOf(cohortTenure(b))===bd;});bandAvg[bd]=inb.length?inb.reduce(function(s,b){return s+cohortAvg(b);},0)/inb.length:0;});
   var rows=br.map(function(b){var t=cohortTenure(b);return {b:b,ten:t,bd:cohortBandOf(t),tot:cohortTotal(b),avg:cohortAvg(b)};});
