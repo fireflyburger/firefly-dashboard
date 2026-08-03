@@ -661,6 +661,10 @@ tr:hover td{background:#f8fafc}
     <div id="rampDiag" style="display:none;margin-bottom:10px;padding:10px 13px;border-radius:8px;font-size:12.5px;line-height:1.5"></div>
     <div class="chart-wrap" style="height:260px"><canvas id="rampChart"></canvas></div>
   </div>
+  <div class="card" style="margin-bottom:18px">
+    <div class="card-title">Cohort summary</div>
+    <div id="cohortSummary" style="font-size:13px;color:#334155;line-height:1.7"></div>
+  </div>
   <div class="card mb" style="margin-bottom:18px">
     <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
       <span>Generation launch comparison &mdash; avg ramp by opening year</span>
@@ -977,10 +981,29 @@ function renderCohorts(){
       +'<td style="padding:8px;text-align:right">#'+r.rank+'/'+r.cohortN+'</td>'
       +'<td style="padding:8px;color:'+st.color+'">'+st.tag+'</td></tr>';
   }).join('');}
+  var sumEl=document.getElementById('cohortSummary');
+  if(sumEl){
+    var uni=(band==='all')?rows:rows.filter(function(r){return r.bd===band;});
+    var n=uni.length, sc={active:0,slowing:0,declining:0,inactive:0};
+    uni.forEach(function(r){var c=branchStatus(r.b).code;if(sc[c]!=null)sc[c]++;});
+    var avgAll=n?uni.reduce(function(s,r){return s+r.avg;},0)/n:0;
+    var srt=uni.slice().sort(function(a,c){return c.avg-a.avg;});
+    var top=srt[0],bot=srt[srt.length-1];
+    var scope=(band==='all')?('Network ('+n+' branches'+(activeOnly?', active only':'')+')'):(band+' cohort ('+n+' branches)');
+    var risk=sc.declining+sc.inactive;
+    var html='<b>'+scope+'</b> &mdash; average '+fmtFull(Math.round(avgAll))+'/mo. Health: <b style="color:#16a34a">'+sc.active+' active</b>, <b style="color:#d97706">'+sc.slowing+' slowing</b>, <b style="color:#dc2626">'+risk+' at risk/closed</b>. ';
+    if(top)html+='Top performer: <b>'+top.b.city+'</b> ('+fmtFull(Math.round(top.avg))+'/mo). ';
+    if(bot&&bot!==top)html+='Weakest: <b>'+bot.b.city+'</b> ('+fmtFull(Math.round(bot.avg))+'/mo). ';
+    if(risk>0)html+='<span style="color:#dc2626">'+risk+' branch(es) need attention.</span>';
+    sumEl.innerHTML=html;
+  }
   var maxAge=0;br.forEach(function(b){var a=cohortActive(b);if(a>maxAge)maxAge=a;});maxAge=Math.min(maxAge,84);
-  var netAvg=[];for(var k=1;k<=maxAge;k++){var vals=[];br.forEach(function(b){var arr=cohortSeries(b);if(arr.length>=k)vals.push(arr[k-1]);});netAvg.push(vals.length?vals.reduce(function(s,v){return s+v;},0)/vals.length:null);}
+  var netAvg=[],p75=[];for(var k=1;k<=maxAge;k++){var vals=[];br.forEach(function(b){var arr=cohortSeries(b);if(arr.length>=k)vals.push(arr[k-1]);});
+    netAvg.push(vals.length?Math.round(vals.reduce(function(s,v){return s+v;},0)/vals.length):null);
+    if(vals.length){vals.sort(function(a,b){return a-b;});p75.push(Math.round(vals[Math.min(vals.length-1,Math.floor(0.75*(vals.length-1)))]));}else p75.push(null);}
   var labels=[];for(var k=1;k<=maxAge;k++)labels.push('M'+k);
-  var ds=[{label:'Network avg',data:netAvg.map(function(v){return v==null?null:Math.round(v);}),borderColor:'#378add',backgroundColor:'#378add14',fill:true,tension:.3,pointRadius:0,borderWidth:2}];
+  var ds=[{label:'Network avg',data:netAvg,borderColor:'#378add',backgroundColor:'#378add14',fill:true,tension:.3,pointRadius:0,borderWidth:2},
+    {label:'Top 25% (best-in-class)',data:p75,borderColor:'#16a34a',backgroundColor:'transparent',fill:false,borderDash:[6,4],tension:.3,pointRadius:0,borderWidth:1.8}];
   var diagEl=document.getElementById('rampDiag');
   if(rampSel && rampSel!=='none'){var sb=br.find(function(b){return b.city===rampSel;});
     if(sb){var arr=cohortSeries(sb);var sd=[];for(var k=0;k<maxAge;k++)sd.push(k<arr.length?Math.round(arr[k]):null);
