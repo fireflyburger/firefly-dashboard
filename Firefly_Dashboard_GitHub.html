@@ -655,8 +655,8 @@ tr:hover td{background:#f8fafc}
   <div class="kpi-grid" id="cohortCards" style="margin-bottom:18px"></div>
   <div class="card mb" style="margin-bottom:18px">
     <div class="card-title">Network ramp curve &mdash; average sales by months since opening</div>
-    <div style="font-size:11px;color:#7d8590;margin-bottom:8px">Aligns every branch by its own age (month 1 = first month open). Shows the typical trajectory; overlay a branch to see if it ramped faster or slower.</div>
-    <div id="rampDiag" style="display:none;margin-bottom:10px;padding:9px 12px;border-radius:8px;font-size:12.5px;font-weight:600"></div>
+    <div style="font-size:11px;color:#7d8590;margin-bottom:8px">Aligns every branch by its own age (month 1 = first month open). Shows the typical trajectory; overlay a branch to see its launch <b>and</b> current status.</div>
+    <div id="rampDiag" style="display:none;margin-bottom:10px;padding:10px 13px;border-radius:8px;font-size:12.5px;line-height:1.5"></div>
     <div class="chart-wrap" style="height:260px"><canvas id="rampChart"></canvas></div>
   </div>
   <div class="card">
@@ -667,7 +667,8 @@ tr:hover td{background:#f8fafc}
           <th style="padding:8px">#</th><th style="padding:8px">Branch</th><th style="padding:8px">Country</th>
           <th style="padding:8px;text-align:right">Operating</th><th style="padding:8px">Cohort</th>
           <th style="padding:8px;text-align:right">Total</th><th style="padding:8px;text-align:right">Monthly avg</th>
-          <th style="padding:8px;text-align:right">vs cohort avg</th><th style="padding:8px;text-align:right">Rank in cohort</th>
+          <th style="padding:8px;text-align:right">vs cohort avg</th><th style="padding:8px;text-align:right">Rank</th>
+          <th style="padding:8px">Status</th>
         </tr></thead>
         <tbody id="cohortBody"></tbody>
       </table>
@@ -880,6 +881,22 @@ function cohortAvg(b){var a=cohortActive(b);return a>0?cohortTotal(b)/a:0;}
 function cohortSeries(b){return Object.keys(b.monthly).sort().map(function(m){return b.monthly[m];});}
 function cohortBandOf(t){return t<=12?'0\u201312 mo':t<=24?'13\u201324 mo':t<=36?'25\u201336 mo':t<=48?'37\u201348 mo':t<=60?'49\u201360 mo':'60+ mo';}
 var COHORT_ORDER=['0\u201312 mo','13\u201324 mo','25\u201336 mo','37\u201348 mo','49\u201360 mo','60+ mo'];
+/* current-health status from own history (peak run-rate vs latest run-rate + recency) */
+function branchStatus(b){
+  var ks=Object.keys(b.monthly).sort(); if(!ks.length)return {tag:'\u2014',color:'#7d8590',code:'none',decline:0,cur:0,behind:0};
+  var arr=ks.map(function(m){return b.monthly[m];});
+  var latest=DATA.allMonths[DATA.allMonths.length-1];
+  var behind=DATA.allMonths.indexOf(latest)-DATA.allMonths.indexOf(ks[ks.length-1]);
+  var w=Math.min(arr.length,12), roll=[];
+  for(var i=w-1;i<arr.length;i++){var s=0;for(var j=i-w+1;j<=i;j++)s+=arr[j];roll.push(s/w);}
+  var cur=roll.length?roll[roll.length-1]:arr[arr.length-1];
+  var peak=roll.length?Math.max.apply(null,roll):cur;
+  var decline=peak>0?((cur-peak)/peak*100):0;
+  if(behind>3)   return {tag:'\ud83d\udd34 Inactive',color:'#dc2626',code:'inactive',decline:decline,cur:cur,peak:peak,behind:behind};
+  if(decline<=-40) return {tag:'\ud83d\udd34 Declining',color:'#dc2626',code:'declining',decline:decline,cur:cur,peak:peak,behind:behind};
+  if(decline<=-15) return {tag:'\ud83d\udfe0 Slowing',color:'#d97706',code:'slowing',decline:decline,cur:cur,peak:peak,behind:behind};
+  return {tag:'\ud83d\udfe2 Active',color:'#16a34a',code:'active',decline:decline,cur:cur,peak:peak,behind:behind};
+}
 function populateRampOptions(band){
   var rb=document.getElementById('rampBranch'); if(!rb)return;
   var list=DATA.branches.filter(function(b){return band==='all'||cohortBandOf(cohortTenure(b))===band;});
@@ -890,8 +907,7 @@ function initCohorts(data){
   var cb=document.getElementById('cohortBand'); if(cb){cb.innerHTML='<option value="all">All cohorts</option>';
     var present={}; data.branches.forEach(function(b){present[cohortBandOf(cohortTenure(b))]=1;});
     COHORT_ORDER.forEach(function(bd){if(present[bd]){var o=document.createElement('option');o.value=bd;o.textContent=bd;cb.appendChild(o);}});}
-  _cohLastBand='all'; populateRampOptions('all');
-  renderCohorts();
+  _cohLastBand='all'; populateRampOptions('all'); renderCohorts();
 }
 function rampDiagnosis(sb){
   var arr=cohortSeries(sb); var K=Math.min(arr.length,12);
@@ -903,26 +919,21 @@ function rampDiagnosis(sb){
   var sorted=peers.slice().sort(function(a,c){return c.av-a.av;});
   var rank=sorted.findIndex(function(p){return p.city===sb.city;})+1;
   var vs=netMean>0?((bAvg-netMean)/netMean*100):0;
-  return {K:K,bAvg:bAvg,netMean:netMean,pctBeat:pctBeat,rank:rank,n:peers.length,vs:vs,faster:pctBeat>=50};
+  return {K:K,bAvg:bAvg,netMean:netMean,pctBeat:pctBeat,rank:rank,n:peers.length,vs:vs,status:branchStatus(sb)};
 }
 function renderCohorts(){
   if(!DATA) return;
   var br=DATA.branches, band=(document.getElementById('cohortBand')||{}).value||'all';
-  /* when cohort changes, rebuild overlay list to that cohort and reset selection */
   if(band!==_cohLastBand){ populateRampOptions(band); var rbx=document.getElementById('rampBranch'); if(rbx)rbx.value='none'; _cohLastBand=band; }
   var rampSel=(document.getElementById('rampBranch')||{}).value||'none';
-  /* cards */
   var cardsEl=document.getElementById('cohortCards');
   if(cardsEl){var html='';COHORT_ORDER.forEach(function(bd){
-    var inb=br.filter(function(b){return cohortBandOf(cohortTenure(b))===bd;});
-    if(!inb.length)return;
+    var inb=br.filter(function(b){return cohortBandOf(cohortTenure(b))===bd;});if(!inb.length)return;
     var avgM=inb.reduce(function(s,b){return s+cohortAvg(b);},0)/inb.length;
     var accent=(band===bd)?'#ff6b2b':'#378add';
     html+='<div class="kpi" style="--accent:'+accent+'"><div class="kpi-label">'+bd+'</div><div class="kpi-value" style="font-size:22px">'+inb.length+'</div><div class="kpi-sub">avg '+fmt(avgM)+'/mo</div></div>';
   });cardsEl.innerHTML=html;}
-  /* cohort averages */
   var bandAvg={};COHORT_ORDER.forEach(function(bd){var inb=br.filter(function(b){return cohortBandOf(cohortTenure(b))===bd;});bandAvg[bd]=inb.length?inb.reduce(function(s,b){return s+cohortAvg(b);},0)/inb.length:0;});
-  /* table */
   var rows=br.map(function(b){var t=cohortTenure(b);return {b:b,ten:t,bd:cohortBandOf(t),tot:cohortTotal(b),avg:cohortAvg(b)};});
   var shown=(band==='all')?rows:rows.filter(function(r){return r.bd===band;});
   var byBand={};rows.forEach(function(r){(byBand[r.bd]=byBand[r.bd]||[]).push(r);});
@@ -931,6 +942,7 @@ function renderCohorts(){
   var tb=document.getElementById('cohortBody');
   if(tb){tb.innerHTML=shown.map(function(r,i){
     var vs=bandAvg[r.bd]>0?((r.avg-bandAvg[r.bd])/bandAvg[r.bd]*100):0;var vc=vs>=0?'#3fb950':'#f85149';
+    var st=branchStatus(r.b);
     return '<tr style="border-bottom:1px solid #21262d">'
       +'<td style="padding:8px;color:#7d8590">'+(i+1)+'</td>'
       +'<td style="padding:8px"><span class="branch-link" onclick="openBranchModal(\''+r.b.city.replace(/'/g,"\\'")+'\',event)" style="color:#ff6b2b;cursor:pointer">'+r.b.city+'</span></td>'
@@ -940,9 +952,9 @@ function renderCohorts(){
       +'<td style="padding:8px;text-align:right">'+fmtFull(r.tot)+'</td>'
       +'<td style="padding:8px;text-align:right;font-weight:600">'+fmtFull(r.avg)+'</td>'
       +'<td style="padding:8px;text-align:right;color:'+vc+'">'+(vs>=0?'+':'')+vs.toFixed(0)+'%</td>'
-      +'<td style="padding:8px;text-align:right">#'+r.rank+' of '+r.cohortN+'</td></tr>';
+      +'<td style="padding:8px;text-align:right">#'+r.rank+'/'+r.cohortN+'</td>'
+      +'<td style="padding:8px;color:'+st.color+'">'+st.tag+'</td></tr>';
   }).join('');}
-  /* ramp curve */
   var maxAge=0;br.forEach(function(b){var a=cohortActive(b);if(a>maxAge)maxAge=a;});maxAge=Math.min(maxAge,84);
   var netAvg=[];for(var k=1;k<=maxAge;k++){var vals=[];br.forEach(function(b){var arr=cohortSeries(b);if(arr.length>=k)vals.push(arr[k-1]);});netAvg.push(vals.length?vals.reduce(function(s,v){return s+v;},0)/vals.length:null);}
   var labels=[];for(var k=1;k<=maxAge;k++)labels.push('M'+k);
@@ -951,10 +963,11 @@ function renderCohorts(){
   if(rampSel && rampSel!=='none'){var sb=br.find(function(b){return b.city===rampSel;});
     if(sb){var arr=cohortSeries(sb);var sd=[];for(var k=0;k<maxAge;k++)sd.push(k<arr.length?Math.round(arr[k]):null);
       ds.push({label:rampSel,data:sd,borderColor:'#ff6b2b',backgroundColor:'transparent',fill:false,tension:.3,pointRadius:0,borderWidth:2.5});
-      if(diagEl){var d=rampDiagnosis(sb);var c=d.faster?'#16a34a':'#dc2626';var bg=d.faster?'#dcfce7':'#fee2e2';var icon=d.faster?'\u26a1':'\u26a0\ufe0f';
-        diagEl.style.display='block';diagEl.style.background=bg;diagEl.style.color=c;diagEl.style.border='1px solid '+c+'55';
-        diagEl.innerHTML=icon+' '+rampSel+' outperformed '+d.pctBeat+'% of the network over its first '+d.K+' months '
-          +'(avg '+fmt(d.bAvg)+' vs network '+fmt(d.netMean)+', '+(d.vs>=0?'+':'')+d.vs.toFixed(0)+'%). Rank #'+d.rank+' of '+d.n+' at this age.';}
+      if(diagEl){var d=rampDiagnosis(sb),st=d.status;
+        var bg=st.code==='active'?'#dcfce7':st.code==='slowing'?'#fef3c7':'#fee2e2';
+        diagEl.style.display='block';diagEl.style.background=bg;diagEl.style.color='#0f172a';diagEl.style.border='1px solid '+st.color+'66';
+        diagEl.innerHTML='<div><b style="color:'+st.color+'">'+st.tag+' &mdash; current status</b> &nbsp;run-rate '+fmt(st.cur)+', '+(st.decline<=0?'':'+')+st.decline.toFixed(0)+'% vs its own peak'+(st.behind>3?(' &middot; no sales for '+st.behind+' months'):'')+'.</div>'
+          +'<div style="margin-top:4px;color:#475569"><b>Launch</b> (first '+d.K+' mo): outperformed '+d.pctBeat+'% of peers &middot; avg '+fmt(d.bAvg)+' vs network '+fmt(d.netMean)+' ('+(d.vs>=0?'+':'')+d.vs.toFixed(0)+'%) &middot; rank #'+d.rank+' of '+d.n+' at this age.</div>';}
     }
   } else if(diagEl){diagEl.style.display='none';}
   if(CHARTS['ramp']){try{CHARTS['ramp'].destroy();}catch(e){}delete CHARTS['ramp'];}
