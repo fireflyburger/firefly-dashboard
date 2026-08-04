@@ -2648,143 +2648,63 @@ function buildAndShowAlerts(data){
 }
 
 function generateAlerts(data){
-  const alerts=[];
-  const lcy=data.lastCompleteYear;
-  const pcy=data.prevCompleteYear;
-  const ytd=data.ytdYear;
-  const ytdMo=data.ytdMonths;
-  const lastMonth=data.allMonths[data.allMonths.length-1];
-
-  /* ── 1. SHARP DECLINERS (YoY > -20%) ── */
-  data.branches.forEach(b=>{
-    const s1=sumYear([b],lcy), s2=sumYear([b],pcy);
-    if(s1>0&&s2>0){
-      const g=pct(s1,s2);
-      if(g<=-20){
-        alerts.push({
-          type:'danger',icon:'🚨',
-          title:`${b.city} — Sharp decline`,
-          detail:`${lcy}: ${fmt(s1)} vs ${pcy}: ${fmt(s2)}`,
-          badge:fmtPct(g),badgeClass:'dn',
-          action:()=>openBranchModal(b.city,null)
-        });
-      } else if(g<=-10){
-        alerts.push({
-          type:'warning',icon:'⚠️',
-          title:`${b.city} — Declining`,
-          detail:`${lcy}: ${fmt(s1)} vs ${pcy}: ${fmt(s2)} · ${b.country}`,
-          badge:fmtPct(g),badgeClass:'dn',
-          action:()=>openBranchModal(b.city,null)
-        });
+  var alerts=[];
+  function add(s,v){return s+v;}
+  function series(b){return cohortSeries(b);}
+  function mom3(b){var a=series(b);if(a.length<6)return null;var l=a.slice(-3).reduce(add,0),p=a.slice(-6,-3).reduce(add,0);return p>0?((l-p)/p*100):null;}
+  var am=data.allMonths;
+  data.branches.forEach(function(b){
+    var st=branchStatus(b), ten=cohortTenure(b), band=cohortBandOf(ten), m3=mom3(b);
+    var ctx='Run-rate '+fmt(st.cur)+'/mo · '+band+' ('+ten+'mo)';
+    var mtxt=(m3!=null)?(' · 3mo '+(m3>=0?'+':'')+m3.toFixed(0)+'%'):'';
+    if(st.code==='inactive'){
+      alerts.push({type:'danger',icon:'📕',title:b.city+' — Inactive / likely closed',
+        detail:'No sales for '+st.behind+' months · last run-rate '+fmt(st.cur)+' · '+b.country,
+        badge:'Closed',badgeClass:'dn',action:function(){openBranchModal(b.city,null);}});
+    } else if(st.code==='declining'){
+      alerts.push({type:'danger',icon:'🚨',title:b.city+' — Sharp decline',
+        detail:ctx+' · '+st.decline.toFixed(0)+'% vs its peak'+mtxt+' · '+b.country,
+        badge:st.decline.toFixed(0)+'%',badgeClass:'dn',action:function(){openBranchModal(b.city,null);}});
+    } else if(st.code==='slowing'){
+      alerts.push({type:'warning',icon:'⚠️',title:b.city+' — Slowing',
+        detail:ctx+' · '+st.decline.toFixed(0)+'% vs its peak'+mtxt+' · '+b.country,
+        badge:st.decline.toFixed(0)+'%',badgeClass:'dn',action:function(){openBranchModal(b.city,null);}});
+    } else {
+      if(ten>=12 && m3!=null && m3<=-15){
+        alerts.push({type:'warning',icon:'📉',title:b.city+' — Losing momentum',
+          detail:ctx+' · last 3 months '+m3.toFixed(0)+'% · '+b.country,
+          badge:m3.toFixed(0)+'%',badgeClass:'dn',action:function(){openBranchModal(b.city,null);}});
+      } else if(m3!=null && m3>=25){
+        alerts.push({type:'success',icon:'🚀',title:b.city+' — Accelerating',
+          detail:ctx+' · last 3 months +'+m3.toFixed(0)+'% · '+b.country,
+          badge:'+'+m3.toFixed(0)+'%',badgeClass:'up',action:function(){openBranchModal(b.city,null);}});
+      }
+    }
+    var ks=Object.keys(b.monthly).sort();
+    if(ks.length && st.code!=='inactive'){
+      var peakK=ks.slice().sort(function(a,c){return b.monthly[c]-b.monthly[a];})[0];
+      if(peakK===am[am.length-1] || peakK===ks[ks.length-1]){
+        alerts.push({type:'success',icon:'🏆',title:b.city+' — Record month',
+          detail:peakK+': '+fmt(b.monthly[peakK])+' (all-time high) · '+b.country,
+          badge:'Record',badgeClass:'up',action:function(){openBranchModal(b.city,null);}});
       }
     }
   });
-
-  /* ── 2. TOP PERFORMER THIS YEAR ── */
-  const topBranch=data.branches
-    .map(b=>({b,s:sumYear([b],lcy),p:sumYear([b],pcy)}))
-    .filter(x=>x.s>0&&x.p>0)
-    .sort((a,b2)=>pct(b2.s,b2.p)-pct(a.s,a.p))[0];
-  if(topBranch){
-    const g=pct(topBranch.s,topBranch.p);
-    if(g>20){
-      alerts.push({
-        type:'success',icon:'🚀',
-        title:`${topBranch.b.city} — Best growth this year`,
-        detail:`${lcy}: ${fmt(topBranch.s)} vs ${pcy}: ${fmt(topBranch.p)} · ${topBranch.b.country}`,
-        badge:fmtPct(g),badgeClass:'up',
-        action:()=>openBranchModal(topBranch.b.city,null)
-      });
-    }
-  }
-
-  /* ── 3. ALL-TIME RECORD MONTHS ── */
-  data.branches.forEach(b=>{
-    const allVals=Object.entries(b.monthly);
-    if(!allVals.length) return;
-    const peak=allVals.sort((a,c2)=>c2[1]-a[1])[0];
-    if(peak[0].startsWith(lcy)||peak[0].startsWith(ytd)){
-      alerts.push({
-        type:'success',icon:'🏆',
-        title:`${b.city} — All-time peak month`,
-        detail:`${peak[0]}: ${fmt(peak[1])} · ${b.country}`,
-        badge:'Record',badgeClass:'up',
-        action:()=>openBranchModal(b.city,null)
-      });
-    }
-  });
-
-  /* ── 4. INACTIVE BRANCHES (no data > 6 months) ── */
-  const sixMonthsAgo=data.allMonths[Math.max(0,data.allMonths.length-7)];
-  const inactive=data.branches.filter(b=>{
-    const lastM=Object.keys(b.monthly).sort().slice(-1)[0]||'';
-    return lastM>='2020-01'&&lastM<sixMonthsAgo&&lastM>='2023-01';
-  });
-  if(inactive.length){
-    alerts.push({
-      type:'neutral',icon:'📭',
-      title:`${inactive.length} branch${inactive.length>1?'es':''} — No recent data`,
-      detail:inactive.slice(0,4).map(b=>b.city).join(', ')+(inactive.length>4?` +${inactive.length-4} more`:''),
-      badge:inactive.length+'',badgeClass:'neu',
-      action:null
-    });
-  }
-
-  /* ── 5. YTD GROWTH vs same period last year ── */
-  if(data.isYTD){
-    const ytdTotal=sumYear(data.branches,ytd);
-    const priorBase=sumYearN(data.branches,lcy,ytdMo);
-    const g=priorBase>0?pct(ytdTotal,priorBase):null;
-    if(g!=null){
-      const mo=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][ytdMo-1];
-      alerts.push({
-        type:g>=0?'info':'warning',icon:g>=0?'📅':'📉',
-        title:`${ytd} YTD (Jan–${mo}) vs same period ${lcy}`,
-        detail:`${ytd}: ${fmt(ytdTotal)} vs ${lcy}: ${fmt(priorBase)}`,
-        badge:fmtPct(g),badgeClass:g>=0?'up':'dn',
-        action:null
-      });
-    }
-  }
-
-  /* ── 6. NEW BRANCHES this year ── */
-  const newBranches=data.branches.filter(b=>{
-    const firstM=Object.keys(b.monthly).sort()[0]||'';
-    return firstM.startsWith(ytd)||firstM.startsWith(lcy);
-  });
-  if(newBranches.length){
-    alerts.push({
-      type:'info',icon:'🆕',
-      title:`${newBranches.length} new branch${newBranches.length>1?'es':''} opened recently`,
-      detail:newBranches.map(b=>b.city+' ('+b.country+')').slice(0,4).join(', '),
-      badge:'New',badgeClass:'neu',
-      action:null
-    });
-  }
-
-  /* ── 7. OVERALL NETWORK HEALTH ── */
-  const totalLCY=sumYear(data.branches,lcy);
-  const totalPCY=sumYear(data.branches,pcy);
-  const netG=pct(totalLCY,totalPCY);
-  if(netG!=null){
-    alerts.unshift({
-      type:netG>=5?'success':netG>=-5?'info':'warning',
-      icon:netG>=5?'💚':'💛',
-      title:`Network ${netG>=0?'growth':'decline'} — ${lcy} vs ${pcy}`,
-      detail:`Total: ${fmt(totalLCY)} vs ${fmt(totalPCY)} across ${data.branches.filter(b=>sumYear([b],lcy)>0).length} active branches`,
-      badge:fmtPct(netG),badgeClass:netG>=0?'up':'dn',
-      action:null,
-      pinned:true
-    });
-  }
-
-  /* limit + sort: danger first */
-  const order={danger:0,warning:1,success:2,info:3,neutral:4};
-  return alerts.sort((a,b)=>{
-    if(a.pinned) return -1;
-    if(b.pinned) return 1;
-    return (order[a.type]||9)-(order[b.type]||9);
-  }).slice(0,12);
+  var sixAgo=am[Math.max(0,am.length-6)];
+  var news=data.branches.filter(function(b){var f=Object.keys(b.monthly).sort()[0]||'';return f>=sixAgo;});
+  if(news.length){alerts.push({type:'info',icon:'🆕',title:news.length+' new branch(es) opened recently',
+    detail:news.slice(0,4).map(function(b){return b.city+' ('+b.country+')';}).join(', ')+(news.length>4?(' +'+(news.length-4)+' more'):''),
+    badge:'New',badgeClass:'neu',action:null});}
+  function net(period){var s=0;data.branches.forEach(function(b){period.forEach(function(m){s+=b.monthly[m]||0;});});return s;}
+  var nl=net(am.slice(-12)), np=net(am.slice(-24,-12)); var ng=np>0?((nl-np)/np*100):null;
+  var sc={active:0,slowing:0,declining:0,inactive:0};
+  data.branches.forEach(function(b){var c=branchStatus(b).code;if(sc[c]!=null)sc[c]++;});
+  alerts.unshift({type:(ng!=null&&ng<0)?'warning':'success',icon:(ng!=null&&ng>=0)?'💚':'💛',
+    title:'Network — last 12 months vs prior 12',
+    detail:sc.active+' active · '+sc.slowing+' slowing · '+(sc.declining+sc.inactive)+' at risk/closed · '+data.branches.length+' branches',
+    badge:ng!=null?((ng>=0?'+':'')+ng.toFixed(0)+'%'):'—',badgeClass:(ng!=null&&ng>=0)?'up':'dn',pinned:true,action:null});
+  var order={danger:0,warning:1,success:2,info:3,neutral:4};
+  return alerts.sort(function(a,b){if(a.pinned)return -1;if(b.pinned)return 1;return (order[a.type]||9)-(order[b.type]||9);}).slice(0,30);
 }
 
 function renderNotifBody(alerts,data){
