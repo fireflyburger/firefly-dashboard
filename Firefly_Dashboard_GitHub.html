@@ -1746,8 +1746,8 @@ function renderIntelligence(){
       const s1=Math.round(sumYear([b],y1));
       const s2=Math.round(sumYear([b],y2));
       const allYearSales=data.allYears.map(y=>({y,v:Math.round(sumYear([b],y))}));
-      return {name:b.city,country:b.country,s1,s2,allYearSales};
-    }).filter(e=>e.s1>0||e.s2>0);
+      return {name:b.city,country:b.country,s1,s2,allYearSales,_b:b};
+    }).filter(e=>e._b&&Object.keys(e._b.monthly).length>0);
   } else {
     const agg={};
     branches.forEach(b=>{
@@ -1758,8 +1758,8 @@ function renderIntelligence(){
       const s1=Math.round(c.branches.reduce((s,b)=>s+sumYear([b],y1),0));
       const s2=Math.round(c.branches.reduce((s,b)=>s+sumYear([b],y2),0));
       const allYearSales=data.allYears.map(y=>({y,v:Math.round(c.branches.reduce((s,b)=>s+sumYear([b],y),0))}));
-      return {name:c.name,country:c.name,s1,s2,allYearSales};
-    }).filter(e=>e.s1>0||e.s2>0);
+      var _mon={};c.branches.forEach(function(b){for(var k in b.monthly)_mon[k]=(_mon[k]||0)+b.monthly[k];});return {name:c.name,country:c.name,s1,s2,allYearSales,_b:{monthly:_mon}};
+    }).filter(e=>e._b&&Object.keys(e._b.monthly).length>0);
   }
 
   entities.forEach(e=>{
@@ -1774,71 +1774,40 @@ function renderIntelligence(){
       const yrs=parseInt(last.y)-parseInt(first.y);
       e.cagr=yrs>0?(Math.pow(last.v/first.v,1/yrs)-1)*100:null;
     } else e.cagr=null;
-    /* status */
-    if(e.growth===null) e.status='no-data';
-    else if(e.growth>=15) e.status='star';
-    else if(e.growth>=5) e.status='growth';
-    else if(e.growth>=-5) e.status='stable';
-    else if(e.growth>=riskPct) e.status='warning';
-    else e.status='danger';
+    /* current-health status: run-rate vs own peak + recency */
+    var _st=branchStatus(e._b); e.status=_st.code; e.decline=_st.decline; e.runrate=_st.cur;
+    var _a=Object.keys(e._b.monthly).sort().map(function(m){return e._b.monthly[m];});
+    e.mom=null; if(_a.length>=6){var _l=_a.slice(-3).reduce(function(s,v){return s+v;},0),_p=_a.slice(-6,-3).reduce(function(s,v){return s+v;},0); e.mom=_p>0?((_l-_p)/_p*100):null;}
+    if(e.status==='none') e.status='inactive';
   });
 
   /* sort by growth desc */
   entities.sort((a,b)=>(b.growth??-999)-(a.growth??-999));
 
   /* ── ALERT SUMMARY ── */
-  const stars=entities.filter(e=>e.status==='star'||e.status==='growth').length;
-  const stable=entities.filter(e=>e.status==='stable').length;
-  const warn=entities.filter(e=>e.status==='warning').length;
-  const danger=entities.filter(e=>e.status==='danger').length;
-  const noData=entities.filter(e=>e.status==='no-data').length;
-  const totalSales1=entities.reduce((s,e)=>s+e.s1,0);
-  const totalSales2=entities.reduce((s,e)=>s+e.s2,0);
-  const overallGrowth=totalSales2>0?pct(totalSales1,totalSales2):null;
-
-  $('intelAlerts').innerHTML=`
-    <div style="background:#fff;border:1px solid #e2e8f0;border-left:3px solid #0f172a;border-radius:8px;padding:12px 14px;box-shadow:0 1px 3px rgba(15,23,42,.04)">
-      <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:4px">Overall ${y1} vs ${y2}</div>
-      <div style="font-size:20px;font-weight:700;color:#0f172a">${fmt(totalSales1)}</div>
-      <div style="font-size:11px;color:#64748b;margin-top:3px"><span class="badge ${overallGrowth>=0?'up':'dn'}">${fmtPct(overallGrowth)}</span> vs ${fmt(totalSales2)}</div>
-    </div>
-    <div style="background:#fff;border:1px solid #e2e8f0;border-left:3px solid #15803d;border-radius:8px;padding:12px 14px;box-shadow:0 1px 3px rgba(15,23,42,.04)">
-      <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:4px">🚀 Growing</div>
-      <div style="font-size:28px;font-weight:700;color:#15803d">${stars}</div>
-      <div style="font-size:11px;color:#64748b;margin-top:3px">${view==='branch'?'branches':'countries'} with +5% or more</div>
-    </div>
-    <div style="background:#fff;border:1px solid #e2e8f0;border-left:3px solid #64748b;border-radius:8px;padding:12px 14px;box-shadow:0 1px 3px rgba(15,23,42,.04)">
-      <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:4px">➡️ Stable</div>
-      <div style="font-size:28px;font-weight:700;color:#374151">${stable}</div>
-      <div style="font-size:11px;color:#64748b;margin-top:3px">within ±5% range</div>
-    </div>
-    <div style="background:#fff;border:1px solid #e2e8f0;border-left:3px solid #d97706;border-radius:8px;padding:12px 14px;box-shadow:0 1px 3px rgba(15,23,42,.04)">
-      <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:4px">⚠️ Warning</div>
-      <div style="font-size:28px;font-weight:700;color:#d97706">${warn}</div>
-      <div style="font-size:11px;color:#64748b;margin-top:3px">declining moderately</div>
-    </div>
-    <div style="background:#fff;border:1px solid #e2e8f0;border-left:3px solid #dc2626;border-radius:8px;padding:12px 14px;box-shadow:0 1px 3px rgba(15,23,42,.04)">
-      <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:4px">🚨 Danger</div>
-      <div style="font-size:28px;font-weight:700;color:#dc2626">${danger}</div>
-      <div style="font-size:11px;color:#64748b;margin-top:3px">sharp decline — action needed</div>
-    </div>
-    ${noData?`<div style="background:#fff;border:1px solid #e2e8f0;border-left:3px solid #94a3b8;border-radius:8px;padding:12px 14px;box-shadow:0 1px 3px rgba(15,23,42,.04)">
-      <div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:4px">📭 No data</div>
-      <div style="font-size:28px;font-weight:700;color:#94a3b8">${noData}</div>
-      <div style="font-size:11px;color:#64748b;margin-top:3px">no sales in ${y1}</div>
-    </div>`:''}
-  `;
+  var cActive=entities.filter(function(e){return e.status==='active';}).length;
+  var cSlow=entities.filter(function(e){return e.status==='slowing';}).length;
+  var cDecl=entities.filter(function(e){return e.status==='declining';}).length;
+  var cInact=entities.filter(function(e){return e.status==='inactive';}).length;
+  var totalSales1=entities.reduce(function(s,e){return s+e.s1;},0);
+  var totalSales2=entities.reduce(function(s,e){return s+e.s2;},0);
+  var overallGrowth=totalSales2>0?pct(totalSales1,totalSales2):null;
+  function _sc(color,label,val,sub){return '<div style="background:#fff;border:1px solid #e2e8f0;border-left:3px solid '+color+';border-radius:8px;padding:12px 14px;box-shadow:0 1px 3px rgba(15,23,42,.04)"><div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:4px">'+label+'</div><div style="font-size:28px;font-weight:700;color:'+color+'">'+val+'</div><div style="font-size:11px;color:#64748b;margin-top:3px">'+sub+'</div></div>';}
+  $('intelAlerts').innerHTML=
+    '<div style="background:#fff;border:1px solid #e2e8f0;border-left:3px solid #0f172a;border-radius:8px;padding:12px 14px;box-shadow:0 1px 3px rgba(15,23,42,.04)"><div style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:4px">Overall '+y1+' vs '+y2+'</div><div style="font-size:20px;font-weight:700;color:#0f172a">'+fmt(totalSales1)+'</div><div style="font-size:11px;color:#64748b;margin-top:3px"><span class="badge '+(overallGrowth>=0?'up':'dn')+'">'+fmtPct(overallGrowth)+'</span> vs '+fmt(totalSales2)+'</div></div>'
+    +_sc('#15803d','\ud83d\udfe2 Active',cActive,(view==='branch'?'branches':'countries')+' near peak')
+    +_sc('#d97706','\ud83d\udfe0 Slowing',cSlow,'15\u201340% below peak')
+    +_sc('#dc2626','\ud83d\udd34 Declining',cDecl,'over 40% below peak')
+    +_sc('#64748b','\u26d4 Inactive',cInact,'no sales > 3 months');
 
   /* ── YoY TABLE ── */
   const statusStyle={
-    'star':   'background:#dcfce7;color:#15803d',
-    'growth': 'background:#dcfce7;color:#166534',
-    'stable': 'background:#fef9c3;color:#854d0e',
-    'warning':'background:#fff7ed;color:#c2410c',
-    'danger': 'background:#fee2e2;color:#dc2626',
-    'no-data':'background:#f8fafc;color:#94a3b8'
+    'active':'background:#dcfce7;color:#15803d',
+    'slowing':'background:#fff7ed;color:#c2410c',
+    'declining':'background:#fee2e2;color:#dc2626',
+    'inactive':'background:#f1f5f9;color:#64748b'
   };
-  const statusIcon={'star':'🚀','growth':'✅','stable':'➡️','warning':'⚠️','danger':'🚨','no-data':'📭'};
+  const statusIcon={'active':'🟢','slowing':'🟠','declining':'🔴','inactive':'⛔'};
 
   $('intelTableTitle').textContent=`${view==='branch'?'Branch':'Country'} performance — ${y1} vs ${y2}`;
   const allYrs=data.allYears;
@@ -1850,7 +1819,7 @@ function renderIntelligence(){
     <th style="text-align:right">${y1} vs ${y2}</th>
     <th style="text-align:right">3-Year Trend</th>
     <th style="text-align:right">CAGR</th>
-    <th>Signal</th>
+    <th>Status (now)</th>
   </tr>`;
 
   $('intelTableBody').innerHTML='';
@@ -1929,50 +1898,30 @@ function renderIntelligence(){
     }
   });
 
-  /* ── RISK & STAR LISTS ── */
-  const riskList=entities.filter(e=>e.status==='danger'||e.status==='warning')
-    .sort((a,b)=>a.growth-b.growth);
-  const riskEl=$('intelRiskList');
-  riskEl.innerHTML='';
-  if(!riskList.length){
-    riskEl.innerHTML='<div class="empty-state">No risk alerts for this period 🎉</div>';
-  } else {
-    riskList.slice(0,8).forEach(e=>{
-      const urgent=e.status==='danger';
-      const div=document.createElement('div');
-      div.style.cssText=`display:flex;align-items:center;gap:10px;padding:10px 13px;background:${urgent?'#fff5f5':'#fffbeb'};border-radius:8px;margin-bottom:7px;border-left:3px solid ${urgent?'#f87171':'#fbbf24'}`;
-      div.innerHTML=`
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600;color:#0f172a">${e.name}</div>
-          <div style="font-size:11px;color:#64748b;margin-top:1px">${view==='branch'?e.country:''} · ${y1}: ${fmt(e.s1)} vs ${y2}: ${fmt(e.s2)}</div>
-        </div>
-        <div style="font-size:14px;font-weight:700;color:${urgent?'#dc2626':'#d97706'};white-space:nowrap">${fmtPct(e.growth)}</div>
-      `;
-      riskEl.appendChild(div);
-    });
-  }
-
-  const starList=entities.filter(e=>e.status==='star'||e.status==='growth')
-    .sort((a,b)=>b.growth-a.growth);
-  const starEl=$('intelStarList');
-  starEl.innerHTML='';
-  if(!starList.length){
-    starEl.innerHTML='<div class="empty-state">No growth stars for this period</div>';
-  } else {
-    starList.slice(0,8).forEach(e=>{
-      const isStar=e.status==='star';
-      const div=document.createElement('div');
-      div.style.cssText=`display:flex;align-items:center;gap:10px;padding:10px 13px;background:${isStar?'#f0fdf4':'#f8fafc'};border-radius:8px;margin-bottom:7px;border-left:3px solid ${isStar?'#4ade80':'#86efac'}`;
-      div.innerHTML=`
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600;color:#0f172a">${e.name}</div>
-          <div style="font-size:11px;color:#64748b;margin-top:1px">${view==='branch'?e.country:''} · ${y1}: ${fmt(e.s1)} vs ${y2}: ${fmt(e.s2)} · CAGR: ${fmtPct(e.cagr)}</div>
-        </div>
-        <div style="font-size:14px;font-weight:700;color:#15803d;white-space:nowrap">${fmtPct(e.growth)}</div>
-      `;
-      starEl.appendChild(div);
-    });
-  }
+  /* ── RISK & STAR LISTS (current health) ── */
+  var riskList=entities.filter(function(e){return e.status==='declining'||e.status==='inactive';}).sort(function(a,b){return (a.decline||0)-(b.decline||0);});
+  var riskEl=$('intelRiskList'); riskEl.innerHTML='';
+  if(!riskList.length){ riskEl.innerHTML='<div class="empty-state">No branches at risk right now 🎉</div>'; }
+  else { riskList.slice(0,8).forEach(function(e){
+    var inact=e.status==='inactive';
+    var div=document.createElement('div');
+    div.style.cssText='display:flex;align-items:center;gap:10px;padding:10px 13px;background:'+(inact?'#f8fafc':'#fff5f5')+';border-radius:8px;margin-bottom:7px;border-left:3px solid '+(inact?'#94a3b8':'#f87171');
+    div.innerHTML='<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:#0f172a">'+e.name+'</div>'
+      +'<div style="font-size:11px;color:#64748b;margin-top:1px">'+(view==='branch'?e.country+' · ':'')+'run-rate '+fmt(e.runrate)+' · '+e.decline.toFixed(0)+'% vs peak</div></div>'
+      +'<div style="font-size:13px;font-weight:700;color:'+(inact?'#64748b':'#dc2626')+';white-space:nowrap">'+(inact?'Inactive':'Declining')+'</div>';
+    riskEl.appendChild(div);
+  }); }
+  var starList=entities.filter(function(e){return e.status==='active'&&(e.mom==null||e.mom>=0);}).sort(function(a,b){return (b.mom||0)-(a.mom||0);});
+  var starEl=$('intelStarList'); starEl.innerHTML='';
+  if(!starList.length){ starEl.innerHTML='<div class="empty-state">No growth stars right now</div>'; }
+  else { starList.slice(0,8).forEach(function(e){
+    var div=document.createElement('div');
+    div.style.cssText='display:flex;align-items:center;gap:10px;padding:10px 13px;background:#f0fdf4;border-radius:8px;margin-bottom:7px;border-left:3px solid #4ade80';
+    div.innerHTML='<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:#0f172a">'+e.name+'</div>'
+      +'<div style="font-size:11px;color:#64748b;margin-top:1px">'+(view==='branch'?e.country+' · ':'')+'run-rate '+fmt(e.runrate)+(e.cagr!=null?' · CAGR '+fmtPct(e.cagr):'')+'</div></div>'
+      +'<div style="font-size:13px;font-weight:700;color:#15803d;white-space:nowrap">'+(e.mom!=null?((e.mom>=0?'+':'')+e.mom.toFixed(0)+'% 3mo'):'Active')+'</div>';
+    starEl.appendChild(div);
+  }); }
 }
 
 /* ══════ TAB: MONTHLY TREND ══════ */
