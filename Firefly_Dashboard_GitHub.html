@@ -313,6 +313,7 @@ tr:hover td{background:#f8fafc}
     <button class="nav-tab" onclick="switchTab('branches',this)">All Branches</button>
     <button class="nav-tab" onclick="switchTab('cohorts',this)">⏱ Cohorts</button>
     <button class="nav-tab" onclick="switchTab('glossary',this)">❓ Glossary</button>
+    <button class="nav-tab" onclick="switchTab('balances',this)">💰 Balances</button>
   </div>
 
   <!-- TAB 1: OVERVIEW -->
@@ -707,6 +708,31 @@ tr:hover td{background:#f8fafc}
   </div>
 </div>
 
+<!-- TAB: BALANCES -->
+<div class="tab-panel" id="tab-balances">
+  <div id="balNote" style="display:none;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:8px;padding:14px;font-size:13px">
+    No balances found. Add a sheet named <b>Monthly Balances</b> to <b>sales_data.xlsx</b> (columns: Country, Account, one column per month, then optional Status &amp; Note), fill each account's accumulated outstanding balance monthly, and re-upload.
+  </div>
+  <div id="balContent">
+    <div class="kpi-grid" id="balKpis" style="margin-bottom:18px"></div>
+    <div class="row2 mb" style="margin-bottom:18px">
+      <div class="card"><div class="card-title">Outstanding by country (current)</div><div class="chart-wrap" style="height:300px"><canvas id="balBarChart"></canvas></div></div>
+      <div class="card"><div class="card-title">Total outstanding &mdash; monthly trend</div><div class="chart-wrap" style="height:300px"><canvas id="balLineChart"></canvas></div></div>
+    </div>
+    <div class="card"><div class="card-title">Outstanding balance by account</div>
+      <div style="font-size:11px;color:#7d8590;margin-bottom:8px">Status: manual (Active / Stopped / Closed) &middot; auto <b style="color:#d97706">Stagnant</b> = balance unchanged 3+ months. Red rows = closed/stopped with money still due.</div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="text-align:left;color:#7d8590;font-size:11px;text-transform:uppercase">
+          <th style="padding:8px">#</th><th style="padding:8px">Account</th><th style="padding:8px">Country</th>
+          <th style="padding:8px;text-align:right">Current balance</th>
+          <th style="padding:8px;text-align:right">&Delta; vs prev</th>
+          <th style="padding:8px;text-align:right">Share</th>
+          <th style="padding:8px">Status / Note</th></tr></thead>
+        <tbody id="balBody"></tbody></table></div>
+    </div>
+  </div>
+</div>
+
 <!-- BRANCH DETAIL MODAL -->
 <div class="modal-overlay" id="branchModal" onclick="if(event.target===this)closeModal()">
   <div class="modal">
@@ -1064,6 +1090,66 @@ function renderGenerations(){
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'bottom',labels:{color:'#7d8590',font:{size:10},boxWidth:12}},tooltip:{callbacks:{label:function(c){return ' '+(c.dataset.label||'')+': '+fmtFull(c.raw);}}}},
       scales:{x:{ticks:{color:'#94a3b8',font:{size:9}},grid:{color:'#1f2630'}},y:{ticks:{color:'#94a3b8',font:{size:10},callback:function(v){return fmt(v);}},grid:{color:'#1f2630'}}}}});
 }
+function initBalances(data){ renderBalances(); }
+function balTag(b,months){
+  var manual=(b.status||''); 
+  var isClosed=/closed|مغلق|اغلاق|إغلاق/i.test(manual);
+  var isStopped=/stop|توقف|متوقف/i.test(manual);
+  var isActive=/active|نشط/i.test(manual);
+  var vals=months.map(function(m){return b.monthly[m];}).filter(function(v){return v!=null;});
+  var stagnant=false;
+  if(vals.length>=3){var l=vals.slice(-3); if(l[0]>0 && l[0]===l[1] && l[1]===l[2]) stagnant=true;}
+  if(isClosed) return {label:'🔴 Closed',color:'#dc2626',risk:true};
+  if(isStopped) return {label:'🔴 Stopped',color:'#dc2626',risk:true};
+  if(stagnant) return {label:'⚠️ Stagnant',color:'#d97706',risk:false};
+  if(isActive) return {label:'🟢 Active',color:'#16a34a',risk:false};
+  return {label:'',color:'#64748b',risk:false};
+}
+function renderBalances(){
+  if(!document.getElementById('tab-balances')) return;
+  var bal=(DATA&&DATA.balances)?DATA.balances:null;
+  var note=document.getElementById('balNote'), content=document.getElementById('balContent');
+  if(!bal||!bal.branches.length){ if(note)note.style.display='block'; if(content)content.style.display='none'; return; }
+  if(note)note.style.display='none'; if(content)content.style.display='block';
+  var months=bal.months.slice(), latest=months[months.length-1], prev=months[months.length-2];
+  function cur(b){ if(b.monthly[latest]!=null) return b.monthly[latest]; var ks=Object.keys(b.monthly).sort(); return ks.length?b.monthly[ks[ks.length-1]]:0; }
+  var all=bal.branches.map(function(b){return {country:b.country,city:b.city,val:cur(b),prev:(b.monthly[prev]!=null?b.monthly[prev]:null),note:b.note||'',tag:balTag(b,months)};});
+  var rows=all.filter(function(r){return r.val>0||(r.prev||0)>0||r.tag.risk;});
+  rows.sort(function(a,b){return b.val-a.val;});
+  var total=rows.reduce(function(s,r){return s+r.val;},0);
+  var prevTotal=rows.reduce(function(s,r){return s+(r.prev||0);},0);
+  var chg=prevTotal>0?((total-prevTotal)/prevTotal*100):null;
+  var top=rows.filter(function(r){return r.val>0;})[0];
+  var closedDue=rows.filter(function(r){return r.tag.risk && r.val>0;});
+  var closedSum=closedDue.reduce(function(s,r){return s+r.val;},0);
+  var byC={}; rows.forEach(function(r){byC[r.country]=(byC[r.country]||0)+r.val;});
+  var cList=Object.keys(byC).map(function(k){return {country:k,val:byC[k]};}).sort(function(a,b){return b.val-a.val;});
+  $('balKpis').innerHTML=
+    '<div class="kpi" style="--accent:#C8102E"><div class="kpi-label">Total outstanding</div><div class="kpi-value">'+fmt(total)+'</div><div class="kpi-sub">as of '+latest+'</div></div>'
+   +'<div class="kpi" style="--accent:#d97706"><div class="kpi-label">Accounts owing</div><div class="kpi-value">'+rows.filter(function(r){return r.val>0;}).length+'</div><div class="kpi-sub">across '+cList.length+' countries</div></div>'
+   +'<div class="kpi" style="--accent:#8B0000"><div class="kpi-label">Top debtor</div><div class="kpi-value" style="font-size:15px;padding-top:6px">'+(top?top.city:'—')+'</div><div class="kpi-sub">'+(top?((top.city!==top.country?top.country+' · ':'')+fmt(top.val)):'')+'</div></div>'
+   +'<div class="kpi" style="--accent:'+((chg||0)<=0?'#16a34a':'#dc2626')+'"><div class="kpi-label">Change vs prev month</div><div class="kpi-value">'+(chg==null?'—':(chg>=0?'+':'')+chg.toFixed(1)+'%')+'</div><div class="kpi-sub">'+(prev||'')+' → '+latest+'</div></div>'
+   +'<div class="kpi" style="--accent:#dc2626"><div class="kpi-label">Closed/stopped w/ dues</div><div class="kpi-value" style="color:#dc2626">'+closedDue.length+'</div><div class="kpi-sub">'+fmt(closedSum)+' outstanding</div></div>';
+  destroyChart('balBar');
+  CHARTS['balBar']=new Chart($('balBarChart'),{type:'bar',data:{labels:cList.map(function(r){return r.country;}),datasets:[{data:cList.map(function(r){return Math.round(r.val);}),backgroundColor:cList.map(function(_,i){return i===0?'#C8102E':'#8B0000aa';}),borderRadius:3}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return ' '+fmtFull(c.raw);}}}},scales:{x:{ticks:{color:'#94a3b8',font:{size:10},callback:function(v){return fmt(v);}},grid:{color:'#f1f5f9'}},y:{ticks:{color:'#374151',font:{size:11}},grid:{display:false}}}}});
+  var totalsByMonth=months.map(function(m){var s=0;bal.branches.forEach(function(b){s+=b.monthly[m]||0;});return Math.round(s);});
+  destroyChart('balLine');
+  CHARTS['balLine']=new Chart($('balLineChart'),{type:'line',data:{labels:months,datasets:[{label:'Total outstanding',data:totalsByMonth,borderColor:'#C8102E',backgroundColor:'#C8102E14',fill:true,tension:.3,pointRadius:months.length>24?0:2,borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return ' '+fmtFull(c.raw);}}}},scales:{x:{ticks:xTicksOpts(months.length),grid:{color:'#f1f5f9'}},y:{ticks:{color:'#94a3b8',font:{size:10},callback:function(v){return fmt(v);}},grid:{color:'#f1f5f9'}}}}});
+  $('balBody').innerHTML=rows.map(function(r,i){
+    var d=(r.prev!=null)?(r.val-r.prev):null; var dc=(d==null)?'#64748b':(d<=0?'#16a34a':'#dc2626');
+    var rowbg=(r.tag.risk&&r.val>0)?'background:#fff5f5;':'';
+    var statusCell=(r.tag.label?'<span style="color:'+r.tag.color+';font-weight:700">'+r.tag.label+'</span>':'')+(r.note?'<span style="color:#94a3b8;font-size:11px"> '+(r.tag.label?'· ':'')+r.note+'</span>':'');
+    return '<tr style="border-bottom:1px solid #eef2f7;'+rowbg+'"><td style="padding:8px;color:#7d8590">'+(i+1)+'</td>'
+      +'<td style="padding:8px;font-weight:600;color:#0f172a">'+r.city+'</td>'
+      +'<td style="padding:8px;color:#7d8590">'+r.country+'</td>'
+      +'<td style="padding:8px;text-align:right;font-weight:600">'+fmtFull(r.val)+'</td>'
+      +'<td style="padding:8px;text-align:right;color:'+dc+'">'+(d==null?'—':((d<=0?'−':'+')+fmtFull(Math.abs(d))))+'</td>'
+      +'<td style="padding:8px;text-align:right;color:#64748b">'+(total>0?(r.val/total*100).toFixed(1):'0')+'%</td>'
+      +'<td style="padding:8px">'+(statusCell||'—')+'</td></tr>';
+  }).join('');
+}
 function reloadData(){
   $('dashboard').style.display='none';
   $('uploadZone').style.display='block';
@@ -1097,6 +1183,43 @@ function parseMonthValue(v){
     if(slash) return slash[2]+'-'+String(parseInt(slash[1])).padStart(2,'0');
   }
   return null;
+}
+
+function parseBalances(wb){
+  var sheet=null;
+  for(var i=0;i<wb.SheetNames.length;i++){ if(/balance|رصيد|مدين/i.test(wb.SheetNames[i])){ sheet=wb.Sheets[wb.SheetNames[i]]; break; } }
+  if(!sheet) return null;
+  var raw=XLSX.utils.sheet_to_json(sheet,{header:1,defval:null});
+  var hr=-1;
+  for(var i=0;i<Math.min(12,raw.length);i++){var cnt=0,row=raw[i]||[];for(var j=0;j<row.length;j++)if(parseMonthValue(row[j]))cnt++;if(cnt>=2){hr=i;break;}}
+  if(hr<0) return null;
+  var hrow=raw[hr], monthsIdx=[];
+  for(var j=0;j<hrow.length;j++){var m=parseMonthValue(hrow[j]);if(m)monthsIdx.push({col:j,month:m});}
+  if(!monthsIdx.length) return null;
+  monthsIdx.sort(function(a,b){return a.month.localeCompare(b.month);});
+  var firstMonthCol=monthsIdx[0].col, branchCol=Math.max(0,firstMonthCol-1), countryCol=0, hasCountry=(branchCol>0);
+  var statusCol=-1, noteCol=-1;
+  for(var j=0;j<hrow.length;j++){var hv=(hrow[j]==null?'':String(hrow[j])).toLowerCase();
+    if(statusCol<0 && /status|حالة|state/.test(hv)) statusCol=j;
+    if(noteCol<0 && /note|notes|ملاح/.test(hv)) noteCol=j;}
+  var curC=null, out=[];
+  for(var i=hr+1;i<raw.length;i++){
+    var row=raw[i]; if(!row) continue;
+    if(hasCountry){var c0=row[countryCol]; if(typeof c0==='string'&&c0.trim()&&isNaN(Number(c0))&&c0.trim().length>1) curC=c0.trim();}
+    var bc=row[branchCol];
+    if(!(typeof bc==='string'&&bc.trim())) continue;
+    var bstr=bc.trim(), low=bstr.toLowerCase();
+    if(['branch','account','city','country','الفرع','الدولة','الحساب','name'].indexOf(low)>=0) continue;
+    var monthly={};
+    for(var k=0;k<monthsIdx.length;k++){var col=monthsIdx[k].col,mo=monthsIdx[k].month;var v=row[col];
+      if(typeof v==='string')v=parseFloat(v.replace(/,/g,'').replace(/\s/g,''));
+      if(typeof v==='number'&&isFinite(v)) monthly[mo]=Math.round(v*100)/100;}
+    var status=(statusCol>=0&&row[statusCol]!=null)?String(row[statusCol]).trim():'';
+    var note=(noteCol>=0&&row[noteCol]!=null)?String(row[noteCol]).trim():'';
+    if(Object.keys(monthly).length || status || note) out.push({country:(hasCountry?(curC||'—'):'—'),city:bstr,monthly:monthly,status:status,note:note});
+  }
+  if(!out.length) return null;
+  return {branches:out,months:monthsIdx.map(function(x){return x.month;})};
 }
 
 function parseWorkbook(wb){
@@ -1185,7 +1308,7 @@ function parseWorkbook(wb){
   const isYTD=ytdYear!==lastCompleteYear;
   const ytdMonths=allMonths.filter(m=>m.startsWith(ytdYear)).length;
 
-  return {branches,allMonths,allYears,countries,lastCompleteYear,prevCompleteYear,ytdYear,isYTD,ytdMonths,ymCounts};
+  return {branches,allMonths,allYears,countries,lastCompleteYear,prevCompleteYear,ytdYear,isYTD,ytdMonths,ymCounts,balances:parseBalances(wb)};
 }
 
 /* ── INIT ── */
@@ -1206,6 +1329,7 @@ function initDashboard(data){
   renderSummary();
   renderAllBranches();
   initCohorts(data);
+  initBalances(data);
 }
 
 function switchTab(name,btn){
