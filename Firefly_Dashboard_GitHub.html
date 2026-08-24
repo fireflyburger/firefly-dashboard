@@ -304,7 +304,8 @@ tr:hover td{background:#f8fafc}
   </div>
 
   <div class="nav-tabs">
-    <button class="nav-tab active" onclick="switchTab('overview',this)">Overview</button>
+    <button class="nav-tab active" onclick="switchTab('executive',this)">⭐ Executive</button>
+    <button class="nav-tab" onclick="switchTab('overview',this)">Overview</button>
     <button class="nav-tab" onclick="switchTab('performance',this)">Branch Performance</button>
     <button class="nav-tab" onclick="switchTab('trends',this)">Trends</button>
     <button class="nav-tab" onclick="switchTab('monthly-trend',this)">📈 Monthly Trend</button>
@@ -316,8 +317,27 @@ tr:hover td{background:#f8fafc}
     <button class="nav-tab" onclick="switchTab('balances',this)">💰 Balances</button>
   </div>
 
+  <!-- TAB: EXECUTIVE -->
+  <div class="tab-panel active" id="tab-executive">
+    <div class="print-header" id="exPrintHeader" style="display:none"></div>
+    <div class="kpi-grid" id="exKpis" style="margin-bottom:14px"></div>
+    <div id="exNarrative" style="background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #C8102E;border-radius:8px;padding:12px 15px;font-size:13.5px;line-height:1.6;color:#0f172a;margin-bottom:18px"></div>
+    <div class="row2 mb" style="margin-bottom:18px">
+      <div class="card"><div class="card-title">Monthly sales trend</div><div class="chart-wrap" style="height:240px"><canvas id="exTrend"></canvas></div></div>
+      <div class="card"><div class="card-title">Network health</div><div class="chart-wrap" style="height:240px"><canvas id="exHealth"></canvas></div></div>
+    </div>
+    <div class="row2e mb" style="margin-bottom:18px">
+      <div class="card"><div class="card-title">🏆 Top 5 branches (all-time sales)</div><div id="exTop"></div></div>
+      <div class="card"><div class="card-title">🚨 Needs attention</div><div id="exRisk"></div></div>
+    </div>
+    <div class="row2e">
+      <div class="card"><div class="card-title">📈 Growing markets (last 12 mo)</div><div id="exGrow"></div></div>
+      <div class="card"><div class="card-title">📉 Declining markets (last 12 mo)</div><div id="exDecl"></div></div>
+    </div>
+  </div>
+
   <!-- TAB 1: OVERVIEW -->
-  <div class="tab-panel active" id="tab-overview">
+  <div class="tab-panel" id="tab-overview">
     <!-- Year filter buttons -->
     <div class="filter-bar" id="yearFilter"></div>
     <!-- Country / Region advanced filters -->
@@ -1150,6 +1170,69 @@ function renderBalances(){
       +'<td style="padding:8px">'+(statusCell||'—')+'</td></tr>';
   }).join('');
 }
+function renderExecutive(data){
+  data=data||DATA; if(!data) return;
+  var br=data.branches, months=data.allMonths;
+  function bt(b){var s=0;for(var k in b.monthly)s+=b.monthly[k];return s;}
+  var allTime=br.reduce(function(s,b){return s+bt(b);},0);
+  var lcy=data.lastCompleteYear,pcy=data.prevCompleteYear,ytd=data.ytdYear;
+  var totalMonth=months.map(function(m){var s=0;br.forEach(function(b){s+=b.monthly[m]||0;});return Math.round(s);});
+  var latestM=months[months.length-1], latestV=totalMonth[totalMonth.length-1], prevV=totalMonth[totalMonth.length-2];
+  var mom=(prevV>0)?((latestV-prevV)/prevV*100):null;
+  var last12=months.slice(-12), prev12=months.slice(-24,-12);
+  function nsum(period){var s=0;br.forEach(function(b){period.forEach(function(m){s+=b.monthly[m]||0;});});return s;}
+  var nl=nsum(last12), np=nsum(prev12), ttmG=np>0?((nl-np)/np*100):null;
+  var ytdTot=sumYear(br,ytd), ytdBase=sumYearN(br,lcy,data.ytdMonths), ytdG=ytdBase>0?pct(ytdTot,ytdBase):null;
+  var sc={active:0,slowing:0,declining:0,inactive:0};
+  br.forEach(function(b){var c=branchStatus(b).code;if(sc[c]!=null)sc[c]++;});
+  var activeCount=br.length-sc.inactive;
+  var bal=data.balances, totalOut=0, closedDue=0, closedN=0, accN=0;
+  if(bal&&bal.branches){var bm=bal.months, bl=bm[bm.length-1];
+    bal.branches.forEach(function(a){var v=(a.monthly[bl]!=null)?a.monthly[bl]:(function(){var ks=Object.keys(a.monthly).sort();return ks.length?a.monthly[ks[ks.length-1]]:0;})();
+      if(v>0){totalOut+=v;accN++;} var st=(a.status||''); if(/closed|stop|مغلق|توقف/i.test(st)&&v>0){closedDue+=v;closedN++;}});}
+  /* KPIs */
+  function k(acc,label,val,sub){return '<div class="kpi" style="--accent:'+acc+'"><div class="kpi-label">'+label+'</div><div class="kpi-value">'+val+'</div><div class="kpi-sub">'+sub+'</div></div>';}
+  var momTxt=(mom==null?'':'<span class="badge '+(mom>=0?'up':'dn')+'">'+fmtPct(mom)+'</span> vs prev');
+  var ttmTxt=(ttmG==null?'':'<span class="badge '+(ttmG>=0?'up':'dn')+'">'+fmtPct(ttmG)+'</span> vs prior 12mo');
+  var ytdTxt=(ytdG==null?'':'<span class="badge '+(ytdG>=0?'up':'dn')+'">'+fmtPct(ytdG)+'</span> vs same period '+lcy);
+  $('exKpis').innerHTML=
+    k('#C8102E','Total sales (all-time)',fmt(allTime),months[0]+' → '+latestM)
+   +k('#ff6b2b',ytd+' year-to-date',fmt(ytdTot),ytdTxt)
+   +k('#378add','Latest month ('+latestM+')',fmt(latestV),momTxt)
+   +k('#16a34a','Trailing 12 months',fmt(nl),ttmTxt)
+   +k('#a371f7','Active branches',activeCount+' / '+br.length,data.countries.length+' countries')
+   +k('#8B0000','Outstanding balance',fmt(totalOut),(closedN?(closedN+' closed w/ dues · '+fmt(closedDue)):accN+' accounts'));
+  /* narrative */
+  $('exNarrative').innerHTML='<b>At a glance:</b> the network booked '+fmt(latestV)+' in '+latestM
+    +(mom!=null?(' ('+fmtPct(mom)+' vs the previous month)'):'')+'. '
+    +'Trailing-12-month sales are '+fmt(nl)+(ttmG!=null?(', '+fmtPct(ttmG)+' vs the prior year'):'')+'. '
+    +activeCount+' of '+br.length+' branches are active'
+    +((sc.declining+sc.inactive)>0?(', while '+(sc.declining+sc.inactive)+' need attention (declining or closed)'):'')+'. '
+    +'Outstanding balances total '+fmt(totalOut)+' across '+accN+' accounts'
+    +(closedN?(', of which '+closedN+' are closed/stopped but still owe '+fmt(closedDue)):'')+'.';
+  /* trend chart */
+  destroyChart('exTrend');
+  CHARTS['exTrend']=new Chart($('exTrend'),{type:'line',data:{labels:months,datasets:[{data:totalMonth,borderColor:'#C8102E',backgroundColor:'#C8102E14',fill:true,tension:.35,pointRadius:months.length>30?0:2,borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return ' '+fmtFull(c.raw);}}}},scales:{x:{ticks:xTicksOpts(months.length),grid:{color:'#f1f5f9'}},y:{ticks:{color:'#94a3b8',font:{size:10},callback:function(v){return fmt(v);}},grid:{color:'#f1f5f9'}}}}});
+  /* health doughnut */
+  destroyChart('exHealth');
+  CHARTS['exHealth']=new Chart($('exHealth'),{type:'doughnut',data:{labels:['Active','Slowing','Declining','Inactive'],datasets:[{data:[sc.active,sc.slowing,sc.declining,sc.inactive],backgroundColor:['#16a34a','#d97706','#dc2626','#94a3b8'],borderWidth:1,borderColor:'#fff'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#475569',font:{size:12},boxWidth:12,padding:10}},tooltip:{callbacks:{label:function(c){return ' '+c.label+': '+c.raw+' branches';}}}}}});
+  /* lists */
+  function branchRow(name,country,right,rc){return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid #f1f5f9"><div style="min-width:0"><div style="font-size:13px;font-weight:600;color:#0f172a">'+name+'</div><div style="font-size:11px;color:#94a3b8">'+country+'</div></div><div style="font-size:13px;font-weight:700;color:'+(rc||'#0f172a')+';white-space:nowrap">'+right+'</div></div>';}
+  var top=br.map(function(b){return {b:b,s:bt(b)};}).sort(function(a,c){return c.s-a.s;}).slice(0,5);
+  $('exTop').innerHTML=top.map(function(x){return branchRow(x.b.city,x.b.country,fmt(x.s),'#15803d');}).join('')||'<div class="empty-state">—</div>';
+  var risk=br.map(function(b){var st=branchStatus(b);return {b:b,st:st};}).filter(function(x){return (x.st.code==='declining'||x.st.code==='inactive')&&x.st.cur>0;}).sort(function(a,c){return a.st.decline-c.st.decline;}).slice(0,5);
+  $('exRisk').innerHTML=risk.map(function(x){var lbl=x.st.code==='inactive'?'Closed':(x.st.decline.toFixed(0)+'%');return branchRow(x.b.city,x.b.country,lbl,'#dc2626');}).join('')||'<div class="empty-state">All healthy 🎉</div>';
+  /* markets by country TTM */
+  function ctm(cn){var bs=br.filter(function(b){return b.country===cn;});function s(p){var t=0;bs.forEach(function(b){p.forEach(function(m){t+=b.monthly[m]||0;});});return t;}var a=s(last12),p=s(prev12);return p>0?((a-p)/p*100):null;}
+  var mk=data.countries.map(function(cn){return {cn:cn,g:ctm(cn),s:nsumC(br,cn,last12)};}).filter(function(x){return x.g!=null;});
+  function nsumC(list,cn,period){var t=0;list.filter(function(b){return b.country===cn;}).forEach(function(b){period.forEach(function(m){t+=b.monthly[m]||0;});});return t;}
+  var grow=mk.slice().sort(function(a,b){return b.g-a.g;}).filter(function(x){return x.g>0;}).slice(0,5);
+  var decl=mk.slice().sort(function(a,b){return a.g-b.g;}).filter(function(x){return x.g<0;}).slice(0,5);
+  $('exGrow').innerHTML=grow.map(function(x){return branchRow(x.cn,fmt(x.s)+' / 12mo','+'+x.g.toFixed(0)+'%','#15803d');}).join('')||'<div class="empty-state">—</div>';
+  $('exDecl').innerHTML=decl.map(function(x){return branchRow(x.cn,fmt(x.s)+' / 12mo',x.g.toFixed(0)+'%','#dc2626');}).join('')||'<div class="empty-state">None 🎉</div>';
+}
 function reloadData(){
   $('dashboard').style.display='none';
   $('uploadZone').style.display='block';
@@ -1330,6 +1413,7 @@ function initDashboard(data){
   renderAllBranches();
   initCohorts(data);
   initBalances(data);
+  renderExecutive(data);
 }
 
 function switchTab(name,btn){
