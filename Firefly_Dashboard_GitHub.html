@@ -311,6 +311,7 @@ tr:hover td{background:#f8fafc}
     <button class="nav-tab" onclick="switchTab('performance',this)">Branch Performance</button>
     <button class="nav-tab" onclick="switchTab('intelligence',this)">🧠 Intelligence</button>
     <button class="nav-tab" onclick="switchTab('cohorts',this)">⏱ Cohorts</button>
+    <button class="nav-tab" onclick="switchTab('forecast',this)">🔮 Forecast</button>
     <button class="nav-tab" onclick="switchTab('monthly-trend',this)">📈 Monthly Trend</button>
     <button class="nav-tab" onclick="switchTab('trends',this)">Trends</button>
     <button class="nav-tab" onclick="switchTab('summary',this)">Summary Table</button>
@@ -777,6 +778,33 @@ tr:hover td{background:#f8fafc}
         <th style="padding:8px;text-align:right">Total sales</th><th style="padding:8px;text-align:right">Monthly avg</th>
         <th style="padding:8px;text-align:right">Share of country</th><th style="padding:8px">Status</th></tr></thead>
       <tbody id="cdBody"></tbody></table></div>
+  </div>
+</div>
+
+<!-- TAB: FORECAST -->
+<div class="tab-panel" id="tab-forecast">
+  <div class="filter-bar" style="margin-bottom:16px;padding:10px 14px;background:#161b22;border:1px solid #30363d;border-radius:8px;gap:14px;align-items:center;flex-wrap:wrap">
+    <label style="color:#7d8590;font-size:11px;text-transform:uppercase;letter-spacing:.05em">Scope</label>
+    <select id="fcScope" onchange="renderForecast()" style="background:#21262d;border:1px solid #30363d;color:#e6edf3;border-radius:6px;padding:5px 10px;font-size:12px"></select>
+    <label style="color:#7d8590;font-size:11px;text-transform:uppercase;letter-spacing:.05em;margin-left:6px">Horizon</label>
+    <select id="fcHorizon" onchange="renderForecast()" style="background:#21262d;border:1px solid #30363d;color:#e6edf3;border-radius:6px;padding:5px 10px;font-size:12px">
+      <option value="3">Next 3 months</option><option value="6" selected>Next 6 months</option><option value="12">Next 12 months</option>
+    </select>
+  </div>
+  <div class="kpi-grid" id="fcKpis" style="margin-bottom:12px"></div>
+  <div id="fcNote" style="background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a5f;border-radius:8px;padding:10px 13px;font-size:12.5px;line-height:1.55;margin-bottom:16px"></div>
+  <div class="card mb" style="margin-bottom:18px">
+    <div class="card-title">Actual vs Forecast &mdash; monthly</div>
+    <div class="legend-row"><span class="legend-item"><span class="legend-sq" style="background:#C8102E"></span>Actual</span> <span class="legend-item"><span class="legend-sq" style="background:#16a34a;opacity:.7"></span>Forecast</span></div>
+    <div class="chart-wrap" style="height:280px"><canvas id="fcChart"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Forecast detail (by month)</div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="text-align:left;color:#7d8590;font-size:11px;text-transform:uppercase">
+        <th style="padding:8px">Month</th><th style="padding:8px;text-align:right">Forecast</th>
+        <th style="padding:8px;text-align:right">vs same month last yr</th><th style="padding:8px">Basis</th></tr></thead>
+      <tbody id="fcBody"></tbody></table></div>
   </div>
 </div>
 
@@ -1332,6 +1360,94 @@ function renderCountry(){
       +'<td style="padding:8px;color:'+stc[r.st.code]+'">'+(stl[r.st.code]||'')+'</td></tr>';
   }).join('');
 }
+function initForecast(data){
+  var sel=document.getElementById('fcScope'); if(!sel) return;
+  var tot={}; data.branches.forEach(function(b){var s=0;for(var k in b.monthly)s+=b.monthly[k];tot[b.country]=(tot[b.country]||0)+s;});
+  var cs=data.countries.slice().sort(function(a,b){return (tot[b]||0)-(tot[a]||0);});
+  var opts='<option value="__net__">Whole network</option>';
+  opts+=cs.map(function(c){return '<option value="C::'+c+'">'+c+' (country)</option>';}).join('');
+  var bs=data.branches.slice().sort(function(a,b){return a.city.localeCompare(b.city);});
+  opts+=bs.map(function(b){return '<option value="B::'+b.city+'">'+b.city+' ('+b.country+')</option>';}).join('');
+  sel.innerHTML=opts;
+  renderForecast();
+}
+function addMonthStr(key,d){var y=+key.slice(0,4),m=+key.slice(5);var idx=y*12+(m-1)+d;var ny=Math.floor(idx/12),nm=idx%12+1;return ny+'-'+(nm<10?'0'+nm:nm);}
+function renderForecast(){
+  if(!DATA) return;
+  var scope=(document.getElementById('fcScope')||{}).value||'__net__';
+  var horizon=parseInt((document.getElementById('fcHorizon')||{}).value||'6');
+  var months=DATA.allMonths;
+  // build the actual monthly series for the chosen scope
+  var set;
+  if(scope==='__net__') set=DATA.branches;
+  else if(scope.slice(0,3)==='C::') set=DATA.branches.filter(function(b){return b.country===scope.slice(3);});
+  else set=DATA.branches.filter(function(b){return b.city===scope.slice(3);});
+  var series=months.map(function(m){var s=0;set.forEach(function(b){s+=b.monthly[m]||0;});return s;});
+  // trim leading zero months (before first sale)
+  var first=0; while(first<series.length && series[first]===0) first++;
+  var actMonths=months.slice(first), actVals=series.slice(first);
+  var n=actVals.length;
+  if(n<3){ if(document.getElementById('fcNote'))document.getElementById('fcNote').innerHTML='Not enough history to forecast this selection.'; }
+  // linear trend on last up-to-12 pts (least squares)
+  function slopeIntercept(ys){var N=ys.length;var sx=0,sy=0,sxy=0,sxx=0;for(var i=0;i<N;i++){sx+=i;sy+=ys[i];sxy+=i*ys[i];sxx+=i*i;}var d=(N*sxx-sx*sx)||1;var m=(N*sxy-sx*sy)/d;var b=(sy-m*sx)/N;return {m:m,b:b,N:N};}
+  var win=actVals.slice(-12); var li=slopeIntercept(win);
+  function trendAt(idxFromWinStart){return li.b+li.m*idxFromWinStart;}
+  // seasonal factors: avg(month)/avg(all) using actual history by calendar month
+  var mSum={},mCnt={},allSum=0,allCnt=0;
+  for(var i=0;i<n;i++){var mo=actMonths[i].slice(5);var v=actVals[i];mSum[mo]=(mSum[mo]||0)+v;mCnt[mo]=(mCnt[mo]||0)+1;allSum+=v;allCnt++;}
+  var gAvg=allCnt?allSum/allCnt:0;
+  function seasFactor(mo){ if(!mCnt[mo]||gAvg<=0) return 1; return (mSum[mo]/mCnt[mo])/gAvg; }
+  // forecast next horizon months
+  var last=actMonths[n-1];
+  var fMonths=[],fVals=[];
+  for(var k=1;k<=horizon;k++){
+    var mk=addMonthStr(last,k);
+    var base=trendAt((win.length-1)+k);           // extend linear trend
+    var f=Math.max(0, base*seasFactor(mk.slice(5)));
+    fMonths.push(mk); fVals.push(Math.round(f));
+  }
+  // KPIs
+  var lastVal=actVals[n-1];
+  var next=fVals[0];
+  var sumF=fVals.reduce(function(s,v){return s+v;},0);
+  // same-period last year for the forecast window
+  var lySum=0,lyHave=0; fMonths.forEach(function(m){var pm=(+m.slice(0,4)-1)+'-'+m.slice(5);var idx=months.indexOf(pm);if(idx>=0){lySum+=series[idx];lyHave++;}});
+  var yoy=lyHave?((sumF-lySum)/(lySum||1)*100):null;
+  var trendPerMo=li.m;
+  function fcK(acc,lab,val,sub){return '<div class="kpi" style="--accent:'+acc+'"><div class="kpi-label">'+lab+'</div><div class="kpi-value">'+val+'</div><div class="kpi-sub">'+sub+'</div></div>';}
+  var lbl=(scope==='__net__')?'Network':(scope.slice(0,3)==='C::'?scope.slice(3):scope.slice(3));
+  $('fcKpis').innerHTML=
+    fcK('#C8102E','Next month ('+fMonths[0]+')',fmt(next),(lastVal>0?('<span class="badge '+(next>=lastVal?'up':'dn')+'">'+fmtPct((next-lastVal)/lastVal*100)+'</span> vs last actual'):''))
+   +fcK('#16a34a','Forecast total ('+horizon+'mo)',fmt(sumF),lbl)
+   +fcK('#378add','vs same period last yr',(yoy==null?'—':'<span class="badge '+(yoy>=0?'up':'dn')+'">'+fmtPct(yoy)+'</span>'),(lyHave?fmt(lySum)+' last yr':'no prior-year data'))
+   +fcK('#a371f7','Underlying trend',(trendPerMo>=0?'+':'')+fmt(trendPerMo)+'/mo',(trendPerMo>=0?'growing':'declining'));
+  if(document.getElementById('fcNote'))document.getElementById('fcNote').innerHTML='<b>How this is estimated:</b> a linear trend over the last '+win.length+' months, adjusted by each calendar month’s seasonal factor (average vs overall). Projection is indicative, not a guarantee — sudden closures/openings or one-off events aren’t predicted.';
+  // chart: actual (last 24) + forecast
+  var showActM=actMonths.slice(-24), showActV=actVals.slice(-24);
+  var labels=showActM.concat(fMonths);
+  var actds=showActV.concat(fMonths.map(function(){return null;}));
+  var fcds=showActV.map(function(){return null;}); 
+  // connect: last actual point starts the forecast line
+  fcds[fcds.length-1]=showActV[showActV.length-1];
+  fcds=fcds.concat(fVals);
+  destroyChart('fc');
+  CHARTS['fc']=new Chart($('fcChart'),{type:'line',data:{labels:labels,datasets:[
+     {label:'Actual',data:actds,borderColor:'#C8102E',backgroundColor:'#C8102E14',fill:true,tension:.3,pointRadius:0,borderWidth:2,spanGaps:false},
+     {label:'Forecast',data:fcds,borderColor:'#16a34a',backgroundColor:'transparent',borderDash:[6,4],tension:.3,pointRadius:0,borderWidth:2,spanGaps:false}
+   ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return (c.raw==null?'':' '+(c.dataset.label)+': '+fmtFull(c.raw));}}}},
+      scales:{x:{ticks:xTicksOpts(labels.length),grid:{color:'#f1f5f9'}},y:{ticks:{color:'#94a3b8',font:{size:10},callback:function(v){return fmt(v);}},grid:{color:'#f1f5f9'}}}}});
+  // table
+  $('fcBody').innerHTML=fMonths.map(function(m,i){
+    var pm=(+m.slice(0,4)-1)+'-'+m.slice(5); var idx=months.indexOf(pm); var ly=idx>=0?series[idx]:null;
+    var d=(ly!=null&&ly>0)?((fVals[i]-ly)/ly*100):null; var dc=(d==null)?'#64748b':(d>=0?'#16a34a':'#dc2626');
+    var mo=m.slice(5); var sf=seasFactor(mo);
+    return '<tr style="border-bottom:1px solid #eef2f7"><td style="padding:8px;color:#0f172a;font-weight:600">'+m+'</td>'
+      +'<td style="padding:8px;text-align:right;font-weight:600">'+fmtFull(fVals[i])+'</td>'
+      +'<td style="padding:8px;text-align:right;color:'+dc+'">'+(d==null?'—':fmtPct(d))+'</td>'
+      +'<td style="padding:8px;color:#64748b;font-size:12px">trend + seasonal ×'+sf.toFixed(2)+'</td></tr>';
+  }).join('');
+}
 function reloadData(){
   $('dashboard').style.display='none';
   $('uploadZone').style.display='block';
@@ -1512,6 +1628,7 @@ function initDashboard(data){
   renderAllBranches();
   initCohorts(data);
   initBalances(data);
+  initForecast(data);
   initCountry(data);
   renderExecutive(data);
 }
