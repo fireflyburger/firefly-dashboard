@@ -306,16 +306,16 @@ tr:hover td{background:#f8fafc}
   <div class="nav-tabs">
     <button class="nav-tab active" onclick="switchTab('executive',this)">⭐ Executive</button>
     <button class="nav-tab" onclick="switchTab('overview',this)">Overview</button>
+    <button class="nav-tab" onclick="switchTab('balances',this)">💰 Balances</button>
+    <button class="nav-tab" onclick="switchTab('country',this)">🌍 Country</button>
     <button class="nav-tab" onclick="switchTab('performance',this)">Branch Performance</button>
-    <button class="nav-tab" onclick="switchTab('trends',this)">Trends</button>
-    <button class="nav-tab" onclick="switchTab('monthly-trend',this)">📈 Monthly Trend</button>
     <button class="nav-tab" onclick="switchTab('intelligence',this)">🧠 Intelligence</button>
+    <button class="nav-tab" onclick="switchTab('cohorts',this)">⏱ Cohorts</button>
+    <button class="nav-tab" onclick="switchTab('monthly-trend',this)">📈 Monthly Trend</button>
+    <button class="nav-tab" onclick="switchTab('trends',this)">Trends</button>
     <button class="nav-tab" onclick="switchTab('summary',this)">Summary Table</button>
     <button class="nav-tab" onclick="switchTab('branches',this)">All Branches</button>
-    <button class="nav-tab" onclick="switchTab('cohorts',this)">⏱ Cohorts</button>
-    <button class="nav-tab" onclick="switchTab('country',this)">🌍 Country</button>
     <button class="nav-tab" onclick="switchTab('glossary',this)">❓ Glossary</button>
-    <button class="nav-tab" onclick="switchTab('balances',this)">💰 Balances</button>
   </div>
 
   <!-- TAB: EXECUTIVE -->
@@ -1512,6 +1512,7 @@ function initDashboard(data){
   renderAllBranches();
   initCohorts(data);
   initBalances(data);
+  initCountry(data);
   renderExecutive(data);
 }
 
