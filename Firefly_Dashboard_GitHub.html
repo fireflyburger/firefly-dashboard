@@ -313,6 +313,7 @@ tr:hover td{background:#f8fafc}
     <button class="nav-tab" onclick="switchTab('summary',this)">Summary Table</button>
     <button class="nav-tab" onclick="switchTab('branches',this)">All Branches</button>
     <button class="nav-tab" onclick="switchTab('cohorts',this)">⏱ Cohorts</button>
+    <button class="nav-tab" onclick="switchTab('country',this)">🌍 Country</button>
     <button class="nav-tab" onclick="switchTab('glossary',this)">❓ Glossary</button>
     <button class="nav-tab" onclick="switchTab('balances',this)">💰 Balances</button>
   </div>
@@ -750,6 +751,32 @@ tr:hover td{background:#f8fafc}
           <th style="padding:8px">Status / Note</th></tr></thead>
         <tbody id="balBody"></tbody></table></div>
     </div>
+  </div>
+</div>
+
+<!-- TAB: COUNTRY DEEP-DIVE -->
+<div class="tab-panel" id="tab-country">
+  <div class="filter-bar" style="margin-bottom:16px;padding:10px 14px;background:#161b22;border:1px solid #30363d;border-radius:8px;gap:14px;align-items:center;flex-wrap:wrap">
+    <label style="color:#7d8590;font-size:11px;text-transform:uppercase;letter-spacing:.05em">Country</label>
+    <select id="cdCountry" onchange="renderCountry()" style="background:#21262d;border:1px solid #30363d;color:#e6edf3;border-radius:6px;padding:5px 12px;font-size:13px"></select>
+  </div>
+  <div class="kpi-grid" id="cdKpis" style="margin-bottom:14px"></div>
+  <div id="cdInsight" style="background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #C8102E;border-radius:8px;padding:11px 14px;font-size:13px;line-height:1.6;color:#0f172a;margin-bottom:18px"></div>
+  <div class="row2 mb" style="margin-bottom:18px">
+    <div class="card"><div class="card-title">Monthly sales trend</div><div class="chart-wrap" style="height:250px"><canvas id="cdTrend"></canvas></div></div>
+    <div class="card"><div class="card-title">Sales by branch (all-time)</div><div class="chart-wrap" id="cdBarWrap" style="height:250px"><canvas id="cdBar"></canvas></div></div>
+  </div>
+  <div class="card mb" style="margin-bottom:18px">
+    <div class="card-title">Seasonality &mdash; avg by calendar month</div><div class="chart-wrap" style="height:180px"><canvas id="cdSeason"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Branches in this country</div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="text-align:left;color:#7d8590;font-size:11px;text-transform:uppercase">
+        <th style="padding:8px">#</th><th style="padding:8px">Branch</th>
+        <th style="padding:8px;text-align:right">Total sales</th><th style="padding:8px;text-align:right">Monthly avg</th>
+        <th style="padding:8px;text-align:right">Share of country</th><th style="padding:8px">Status</th></tr></thead>
+      <tbody id="cdBody"></tbody></table></div>
   </div>
 </div>
 
@@ -1232,6 +1259,78 @@ function renderExecutive(data){
   var decl=mk.slice().sort(function(a,b){return a.g-b.g;}).filter(function(x){return x.g<0;}).slice(0,5);
   $('exGrow').innerHTML=grow.map(function(x){return branchRow(x.cn,fmt(x.s)+' / 12mo','+'+x.g.toFixed(0)+'%','#15803d');}).join('')||'<div class="empty-state">—</div>';
   $('exDecl').innerHTML=decl.map(function(x){return branchRow(x.cn,fmt(x.s)+' / 12mo',x.g.toFixed(0)+'%','#dc2626');}).join('')||'<div class="empty-state">None 🎉</div>';
+}
+function initCountry(data){
+  var sel=document.getElementById('cdCountry'); if(!sel) return;
+  var tot={}; data.branches.forEach(function(b){var s=0;for(var k in b.monthly)s+=b.monthly[k];tot[b.country]=(tot[b.country]||0)+s;});
+  var cs=data.countries.slice().sort(function(a,b){return (tot[b]||0)-(tot[a]||0);});
+  sel.innerHTML=cs.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('');
+  renderCountry();
+}
+function cdNorm(c){ var m={'Emirates':'UAE','Ger':'Germany','CANADA':'Canada'}; return m[c]||c; }
+function renderCountry(){
+  if(!DATA) return;
+  var cn=(document.getElementById('cdCountry')||{}).value; if(!cn) return;
+  var months=DATA.allMonths, lcy=DATA.lastCompleteYear, pcy=DATA.prevCompleteYear;
+  var bs=DATA.branches.filter(function(b){return b.country===cn;});
+  function bt(b){var s=0;for(var k in b.monthly)s+=b.monthly[k];return s;}
+  var total=bs.reduce(function(s,b){return s+bt(b);},0);
+  var netTotal=DATA.branches.reduce(function(s,b){return s+bt(b);},0);
+  var monthlyC=months.map(function(m){var s=0;bs.forEach(function(b){s+=b.monthly[m]||0;});return Math.round(s);});
+  var last12=months.slice(-12), prev12=months.slice(-24,-12);
+  function per(p){var s=0;bs.forEach(function(b){p.forEach(function(m){s+=b.monthly[m]||0;});});return s;}
+  var nl=per(last12), np=per(prev12), ttmG=np>0?((nl-np)/np*100):null;
+  var sc={active:0,slowing:0,declining:0,inactive:0};
+  bs.forEach(function(b){var c=branchStatus(b).code;if(sc[c]!=null)sc[c]++;});
+  var activeCount=bs.length-sc.inactive;
+  var share=netTotal>0?(total/netTotal*100):0;
+  // balances for this country
+  var outC=0; if(DATA.balances&&DATA.balances.branches){var bm=DATA.balances.months, bl=bm[bm.length-1];
+    DATA.balances.branches.forEach(function(a){ if(cdNorm(cn)===cdNorm(a.country)){var v=(a.monthly[bl]!=null)?a.monthly[bl]:0; if(v>0)outC+=v;} });}
+  function k(acc,lab,val,sub){return '<div class="kpi" style="--accent:'+acc+'"><div class="kpi-label">'+lab+'</div><div class="kpi-value">'+val+'</div><div class="kpi-sub">'+sub+'</div></div>';}
+  $('cdKpis').innerHTML=
+    k('#C8102E','Total sales (all-time)',fmt(total),months[0]+' → '+months[months.length-1])
+   +k('#ff6b2b','Share of network',share.toFixed(1)+'%','of '+fmt(netTotal))
+   +k('#16a34a','Trailing 12 months',fmt(nl),ttmG==null?'':'<span class="badge '+(ttmG>=0?'up':'dn')+'">'+fmtPct(ttmG)+'</span> vs prior 12mo')
+   +k('#a371f7','Active branches',activeCount+' / '+bs.length,sc.declining+sc.inactive+' need attention')
+   +k('#378add',lcy+' full year',fmt(sumYear(bs,lcy)),'<span class="badge '+((pct(sumYear(bs,lcy),sumYear(bs,pcy))||0)>=0?'up':'dn')+'">'+fmtPct(pct(sumYear(bs,lcy),sumYear(bs,pcy)))+'</span> vs '+pcy)
+   +k('#8B0000','Outstanding balance',fmt(outC),'this country');
+  // rows
+  var rows=bs.map(function(b){var t=bt(b);var am=Object.keys(b.monthly).length;return {b:b,t:t,avg:am>0?t/am:0,st:branchStatus(b)};}).sort(function(a,c){return c.t-a.t;});
+  var top=rows[0], wk=rows.filter(function(r){return r.st.code!=='inactive';}).slice(-1)[0];
+  $('cdInsight').innerHTML='<b>'+cn+'</b> contributes <b>'+share.toFixed(1)+'%</b> of the network ('+bs.length+' branches, '+activeCount+' active). '
+    +'Trailing-12-month sales '+fmt(nl)+(ttmG!=null?(' ('+fmtPct(ttmG)+' vs prior year)'):'')+'. '
+    +(top?('Top branch: <b>'+top.b.city+'</b> ('+fmt(top.t)+').'):'' )
+    +((sc.declining+sc.inactive)>0?(' <span style="color:#dc2626">'+(sc.declining+sc.inactive)+' branch(es) declining/closed.</span>'):'');
+  // trend
+  destroyChart('cdTrend');
+  CHARTS['cdTrend']=new Chart($('cdTrend'),{type:'line',data:{labels:months,datasets:[{data:monthlyC,borderColor:'#C8102E',backgroundColor:'#C8102E14',fill:true,tension:.35,pointRadius:months.length>30?0:2,borderWidth:2}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return ' '+fmtFull(c.raw);}}}},scales:{x:{ticks:xTicksOpts(months.length),grid:{color:'#f1f5f9'}},y:{ticks:{color:'#94a3b8',font:{size:10},callback:function(v){return fmt(v);}},grid:{color:'#f1f5f9'}}}}});
+  // bar by branch
+  var wrap=document.getElementById('cdBarWrap'); if(wrap) wrap.style.height=Math.max(200,rows.length*26+50)+'px';
+  destroyChart('cdBar');
+  CHARTS['cdBar']=new Chart($('cdBar'),{type:'bar',data:{labels:rows.map(function(r){return r.b.city;}),datasets:[{data:rows.map(function(r){return Math.round(r.t);}),backgroundColor:rows.map(function(_,i){return i===0?'#C8102E':'#8B0000aa';}),borderRadius:3}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return ' '+fmtFull(c.raw);}}}},scales:{x:{ticks:{color:'#94a3b8',font:{size:10},callback:function(v){return fmt(v);}},grid:{color:'#f1f5f9'}},y:{ticks:{color:'#374151',font:{size:11}},grid:{display:false}}}}});
+  // seasonality
+  var MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var ss={},scnt={};
+  months.forEach(function(m){var mo=m.slice(5);var v=monthlyC[months.indexOf(m)];ss[mo]=(ss[mo]||0)+v;scnt[mo]=(scnt[mo]||0)+1;});
+  var savg=[];for(var i=1;i<=12;i++){var kk=(''+i).length<2?('0'+i):(''+i);savg.push(scnt[kk]?Math.round(ss[kk]/scnt[kk]):0);}
+  var pk=0;for(var i=1;i<12;i++)if(savg[i]>savg[pk])pk=i;
+  destroyChart('cdSeason');
+  CHARTS['cdSeason']=new Chart($('cdSeason'),{type:'bar',data:{labels:MN,datasets:[{data:savg,backgroundColor:MN.map(function(_,i){return i===pk?'#ff6b2b':'#378add88';}),borderRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return ' '+fmtFull(c.raw);}}}},scales:{x:{ticks:{color:'#94a3b8',font:{size:10}},grid:{display:false}},y:{ticks:{color:'#94a3b8',font:{size:9},callback:function(v){return fmt(v);}},grid:{color:'#f1f5f9'}}}}});
+  // table
+  var stc={active:'#16a34a',slowing:'#d97706',declining:'#dc2626',inactive:'#64748b'};
+  var stl={active:'🟢 Active',slowing:'🟠 Slowing',declining:'🔴 Declining',inactive:'⛔ Inactive'};
+  $('cdBody').innerHTML=rows.map(function(r,i){
+    return '<tr style="border-bottom:1px solid #eef2f7"><td style="padding:8px;color:#7d8590">'+(i+1)+'</td>'
+      +'<td style="padding:8px;font-weight:600;color:#0f172a"><span class="branch-link" onclick="openBranchModal(\''+r.b.city.replace(/'/g,"\\'")+'\',event)" style="cursor:pointer">'+r.b.city+'</span></td>'
+      +'<td style="padding:8px;text-align:right;font-weight:600">'+fmtFull(r.t)+'</td>'
+      +'<td style="padding:8px;text-align:right;color:#475569">'+fmtFull(Math.round(r.avg))+'</td>'
+      +'<td style="padding:8px;text-align:right;color:#64748b">'+(total>0?(r.t/total*100).toFixed(1):'0')+'%</td>'
+      +'<td style="padding:8px;color:'+stc[r.st.code]+'">'+(stl[r.st.code]||'')+'</td></tr>';
+  }).join('');
 }
 function reloadData(){
   $('dashboard').style.display='none';
