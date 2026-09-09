@@ -264,6 +264,7 @@ tr:hover td{background:#f8fafc}
   </div>
   <div class="topbar-right">
     <span id="last-updated"></span>
+    <button class="reload-btn" onclick="exportActiveCSV()" title="Export current table to CSV (Excel)">&#11015; CSV</button>
     <button class="reload-btn" onclick="printReport()" title="Print or save as PDF">&#128424; Print / PDF</button>
     <button class="reload-btn" onclick="reloadData()">&#8635; Reload Data</button>
     <button class="reload-btn" onclick="logout()" style="border-color:#f8514966;color:#f85149">&#10005; Sign out</button>
@@ -1447,6 +1448,30 @@ function renderForecast(){
       +'<td style="padding:8px;text-align:right;color:'+dc+'">'+(d==null?'—':fmtPct(d))+'</td>'
       +'<td style="padding:8px;color:#64748b;font-size:12px">trend + seasonal ×'+sf.toFixed(2)+'</td></tr>';
   }).join('');
+}
+function csvCell(s){s=(s==null?'':String(s)).replace(/\s+/g,' ').trim();return '"'+s.replace(/"/g,'""')+'"';}
+function exportActiveCSV(){
+  var modal=document.getElementById('branchModal');
+  var scope=(modal&&modal.classList.contains('open'))?modal:document.querySelector('.tab-panel.active');
+  if(!scope){alert('Nothing to export.');return;}
+  var table=scope.querySelector('table');
+  if(!table){alert('This view has no table to export. Use Print / PDF for charts.');return;}
+  var rows=[];
+  var th=table.querySelectorAll('thead th');
+  if(th.length) rows.push([].map.call(th,function(c){return csvCell(c.textContent);}).join(','));
+  var trs=table.querySelectorAll('tbody tr');
+  [].forEach.call(trs,function(tr){var td=tr.querySelectorAll('td');if(td.length)rows.push([].map.call(td,function(c){return csvCell(c.textContent);}).join(','));});
+  if(rows.length<2){alert('No rows to export in this table.');return;}
+  var nav=document.querySelector('.nav-tab.active');
+  var name=((modal&&modal.classList.contains('open'))?( (document.getElementById('modalTitle')||{}).textContent||'branch') : (nav?nav.textContent:'export'));
+  name=('Firefly_'+String(name).replace(/[^A-Za-z0-9]+/g,'_')).replace(/_+$/,'')+'_'+(new Date().toISOString().slice(0,10))+'.csv';
+  var csv='﻿'+rows.join('\r\n');
+  try{
+    var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+    var url=URL.createObjectURL(blob); var a=document.createElement('a');
+    a.href=url; a.download=name; document.body.appendChild(a); a.click();
+    setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},100);
+  }catch(e){ alert('Export failed: '+e.message); }
 }
 function reloadData(){
   $('dashboard').style.display='none';
@@ -3089,6 +3114,23 @@ function generateAlerts(data){
     title:'Network — last 12 months vs prior 12',
     detail:sc.active+' active · '+sc.slowing+' slowing · '+(sc.declining+sc.inactive)+' at risk/closed · '+data.branches.length+' branches',
     badge:ng!=null?((ng>=0?'+':'')+ng.toFixed(0)+'%'):'—',badgeClass:(ng!=null&&ng>=0)?'up':'dn',pinned:true,action:null});
+  /* ── balance alerts (overdue / high outstanding) ── */
+  if(DATA.balances && DATA.balances.branches && DATA.balances.months.length){
+    var _bl=DATA.balances.months[DATA.balances.months.length-1];
+    DATA.balances.branches.forEach(function(a){
+      var v=(a.monthly[_bl]!=null)?a.monthly[_bl]:0; if(!(v>0)) return;
+      var st=(a.status||''); var closed=/closed|stop|مغلق|توقف|اغلاق|إغلاق/i.test(st);
+      if(closed){
+        alerts.push({type:'danger',icon:'💰',title:a.city+' — owes '+fmt(v)+' (closed/stopped)',
+          detail:'Outstanding balance on a closed/stopped account · '+a.country,
+          badge:fmt(v),badgeClass:'dn',action:function(){switchTab('balances',document.querySelector('.nav-tab'));}});
+      } else if(v>=100000){
+        alerts.push({type:'warning',icon:'💰',title:a.city+' — high outstanding balance',
+          detail:'Owes '+fmt(v)+' as of '+_bl+' · '+a.country,
+          badge:fmt(v),badgeClass:'dn',action:function(){switchTab('balances',document.querySelector('.nav-tab'));}});
+      }
+    });
+  }
   var order={danger:0,warning:1,success:2,info:3,neutral:4};
   return alerts.sort(function(a,b){if(a.pinned)return -1;if(b.pinned)return 1;return (order[a.type]||9)-(order[b.type]||9);}).slice(0,30);
 }
